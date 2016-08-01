@@ -557,7 +557,7 @@ _e_devmgr_buffer_free(E_Devmgr_Buf *mbuf, const char *func)
 
    mbuf_lists = eina_list_remove(mbuf_lists, mbuf);
 
-   BDB("freed: %s", func);
+   BDB("mbuf(%p) freed: %s", mbuf, func);
 
    mbuf->stamp = 0;
 
@@ -635,6 +635,8 @@ _e_devmgr_buffer_valid(E_Devmgr_Buf *mbuf, const char *func)
         if (temp->stamp == mbuf->stamp)
             return EINA_TRUE;
      }
+
+   BDB("mbuf(%p) invalid", mbuf);
 
    return EINA_FALSE;
 }

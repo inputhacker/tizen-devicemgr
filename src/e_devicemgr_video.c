@@ -1137,14 +1137,14 @@ _e_video_destroy(E_Video *video)
    EINA_LIST_FOREACH_SAFE(video->input_buffer_list, l, ll, mbuf)
      {
         tdm_buffer_remove_release_handler(mbuf->tbm_surface,
-                                          _e_video_input_buffer_cb_release, video);
+                                          _e_video_input_buffer_cb_release, mbuf);
         e_devmgr_buffer_unref(mbuf);
      }
 
    EINA_LIST_FOREACH_SAFE(video->pp_buffer_list, l, ll, mbuf)
      {
         tdm_buffer_remove_release_handler(mbuf->tbm_surface,
-                                          _e_video_pp_buffer_cb_release, video);
+                                          _e_video_pp_buffer_cb_release, mbuf);
         e_devmgr_buffer_unref(mbuf);
      }
 
@@ -1238,7 +1238,9 @@ _e_video_pp_buffer_cb_release(tbm_surface_h surface, void *user_data)
         if (mbuf->tbm_surface == surface)
            break;
      }
-   EINA_SAFETY_ON_NULL_RETURN(mbuf);
+
+   if (!mbuf)
+     return;
 
    tdm_buffer_remove_release_handler(surface, _e_video_pp_buffer_cb_release, video);
 
@@ -1611,21 +1613,12 @@ static void
 _e_devicemgr_video_cb_get_viewport(struct wl_client *client,
                                    struct wl_resource *resource,
                                    uint32_t id,
-                                   struct wl_resource *subsurface)
+                                   struct wl_resource *surface)
 {
    E_Client *ec;
 
-   if (!(ec = wl_resource_get_user_data(subsurface))) return;
+   if (!(ec = wl_resource_get_user_data(surface))) return;
    if (!ec->comp_data) return;
-
-   if (!ec->comp_data->sub.data)
-     {
-        wl_resource_post_error(resource,
-                               WL_DISPLAY_ERROR_INVALID_OBJECT,
-                               "wl_subsurface@%d is not subsurface",
-                               wl_resource_get_id(subsurface));
-        return;
-     }
 
    if (ec->comp_data && ec->comp_data->scaler.viewport)
      {
@@ -1635,10 +1628,10 @@ _e_devicemgr_video_cb_get_viewport(struct wl_client *client,
         return;
      }
 
-   if (!e_devicemgr_viewport_create(resource, id, subsurface))
+   if (!e_devicemgr_viewport_create(resource, id, surface))
      {
-        ERR("Failed to create viewport for wl_subsurface@%d",
-            wl_resource_get_id(subsurface));
+        ERR("Failed to create viewport for wl_surface@%d",
+            wl_resource_get_id(surface));
         wl_client_post_no_memory(client);
         return;
      }

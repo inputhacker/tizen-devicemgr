@@ -13,6 +13,6 @@ void e_devicemgr_viewport_fini(void);
 
 Eina_Bool e_devicemgr_viewport_create(struct wl_resource *resource,
                                       uint32_t id,
-                                      struct wl_resource *subsurface);
+                                      struct wl_resource *surface);
 
 #endif

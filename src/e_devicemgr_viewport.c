@@ -25,7 +25,6 @@ typedef struct _E_Viewport {
 
    Ecore_Event_Handler *topmost_rotate_hdl;
 
-   struct wl_listener subsurface_destroy_listener;
    struct wl_listener surface_destroy_listener;
    struct wl_listener surface_apply_viewport_listener;
 
@@ -34,8 +33,10 @@ typedef struct _E_Viewport {
    unsigned int transform;
 
    Eina_Rectangle source;
+   Eina_Rectangle cropped_source;
+
    E_Viewport_Destination_Type type;
-   union {
+   struct {
       Eina_Rectangle rect;
 
       struct {
@@ -113,7 +114,6 @@ _destroy_viewport(E_Viewport *viewport)
                                        _e_devicemgr_viewport_cb_topmost_move, viewport);
 
    wl_list_remove(&viewport->surface_destroy_listener.link);
-   wl_list_remove(&viewport->subsurface_destroy_listener.link);
    wl_list_remove(&viewport->surface_apply_viewport_listener.link);
 
    wl_resource_set_user_data(viewport->resource, NULL);
@@ -145,9 +145,8 @@ _e_devicemgr_destination_mode_destroy(struct wl_resource *resource)
 
    if (!viewport) return;
 
-   viewport->type = DESTINATION_TYPE_NONE;
-
-   memset(&viewport->destination, 0, sizeof viewport->destination.mode);
+   if (viewport->type == DESTINATION_TYPE_MODE)
+     viewport->type = DESTINATION_TYPE_NONE;
 
    viewport->changed = EINA_TRUE;
 
@@ -204,12 +203,15 @@ _e_devicemgr_destination_mode_cb_set(struct wl_client *client,
 
    if (!viewport) return;
 
-   if (type <= TIZEN_DESTINATION_MODE_TYPE_NONE ||
+   if (type < TIZEN_DESTINATION_MODE_TYPE_NONE ||
        type > TIZEN_DESTINATION_MODE_TYPE_ORIGIN_OR_LETTER)
      {
         PER("invalid param: type(%d)", type);
         return;
      }
+
+   if (type != TIZEN_DESTINATION_MODE_TYPE_NONE)
+     viewport->type = DESTINATION_TYPE_MODE;
 
    if (viewport->destination.mode.type == type)
      return;
@@ -233,6 +235,14 @@ _e_devicemgr_destination_mode_cb_set_ratio(struct wl_client *client,
 
    ratio_h = wl_fixed_to_double(horizontal);
    ratio_v = wl_fixed_to_double(vertical);
+
+   if (ratio_h == -1.0)
+     {
+        PDB("reset destinatino ratio");
+        viewport->destination.mode.ratio_h = ratio_h;
+        viewport->changed = EINA_TRUE;
+        return;
+     }
 
    if (ratio_h <= 0 || ratio_v <= 0)
      {
@@ -265,6 +275,14 @@ _e_devicemgr_destination_mode_cb_set_scale(struct wl_client *client,
    scale_h = wl_fixed_to_double(horizontal);
    scale_v = wl_fixed_to_double(vertical);
 
+   if (scale_h == -1.0)
+     {
+        PDB("reset destinatino scale");
+        viewport->destination.mode.scale_h = scale_h;
+        viewport->changed = EINA_TRUE;
+        return;
+     }
+
    if (scale_h <= 0 || scale_v <= 0)
      {
         PER("invalid param: scale_h(%.2f) scale_v(%.2f)", scale_h, scale_v);
@@ -295,6 +313,14 @@ _e_devicemgr_destination_mode_cb_set_align(struct wl_client *client,
 
    align_h = wl_fixed_to_double(horizontal);
    align_v = wl_fixed_to_double(vertical);
+
+   if (align_h == -1.0)
+     {
+        PDB("reset destinatino align");
+        viewport->destination.mode.align_h = align_h;
+        viewport->changed = EINA_TRUE;
+        return;
+     }
 
    if (align_h < 0.0)
       align_h = 0.0;
@@ -417,6 +443,7 @@ _e_devicemgr_viewport_cb_set_source(struct wl_client *client EINA_UNUSED,
    viewport->source.y = y;
    viewport->source.w = width;
    viewport->source.h = height;
+   viewport->cropped_source = viewport->source;
    viewport->changed = EINA_TRUE;
 
    PDB("source(%d,%d %dx%d)", EINA_RECTANGLE_ARGS(&viewport->source));
@@ -434,26 +461,25 @@ _e_devicemgr_viewport_cb_set_destination(struct wl_client *client EINA_UNUSED,
 
    if (!viewport) return;
 
-   if (viewport->type == DESTINATION_TYPE_MODE)
-     {
-        PER("couldn't set viewport destination. tizen_viewport@%d has the mode",
-            wl_resource_get_id(resource));
-        return;
-     }
-
    if (width == 0 || height == 0)
      {
         PER("invalid param: destination.rect(%d,%d %dx%d)", x, y, width, height);
         return;
      }
 
-   if (viewport->destination.rect.x == x && viewport->destination.rect.y == y &&
-       viewport->destination.rect.w == width && viewport->destination.rect.h == height)
-     return;
+   /* ignore x, y pos in case of a toplevel-role surface(shell surface). The
+    * position is decided by shell surface interface.
+    */
+   if (viewport->topmost == viewport->ec)
+     x = y = 0;
 
    PDB("destination.rect(%d,%d %dx%d)", x, y, width, height);
 
    viewport->type = DESTINATION_TYPE_RECT;
+
+   if (viewport->destination.rect.x == x && viewport->destination.rect.y == y &&
+       viewport->destination.rect.w == width && viewport->destination.rect.h == height)
+     return;
 
    viewport->destination.rect.x = x;
    viewport->destination.rect.y = y;
@@ -482,8 +508,8 @@ _e_devicemgr_viewport_cb_set_destination_ratio(struct wl_client *client EINA_UNU
         return;
      }
 
-   ratio_x = wl_fixed_to_double(x);
-   ratio_y = wl_fixed_to_double(y);
+   ratio_x = (viewport->epc) ? wl_fixed_to_double(x) : 0;
+   ratio_y = (viewport->epc) ? wl_fixed_to_double(y) : 0;
    ratio_w = wl_fixed_to_double(width);
    ratio_h = wl_fixed_to_double(height);
 
@@ -493,13 +519,12 @@ _e_devicemgr_viewport_cb_set_destination_ratio(struct wl_client *client EINA_UNU
         return;
      }
 
+   PDB("destination.ratio(%.2f,%.2f %.2fx%.2f)", ratio_x, ratio_y, ratio_w, ratio_h);
+   viewport->type = DESTINATION_TYPE_RATIO;
+
    if (viewport->destination.ratio.x == ratio_x && viewport->destination.ratio.y == ratio_y &&
        viewport->destination.ratio.w == ratio_w && viewport->destination.ratio.h == ratio_h)
      return;
-
-   PDB("destination.ratio(%.2f,%.2f %.2fx%.2f)", ratio_x, ratio_y, ratio_w, ratio_h);
-
-   viewport->type = DESTINATION_TYPE_RATIO;
 
    viewport->destination.ratio.x = ratio_x;
    viewport->destination.ratio.y = ratio_y;
@@ -525,7 +550,6 @@ _e_devicemgr_viewport_cb_get_destination_mode(struct wl_client *client,
         return;
      }
 
-   /* try to create the subsurface resource */
    if (!(res = wl_resource_create(client, &tizen_destination_mode_interface, version, id)))
      {
         PER("Failed to create destination_mode resource");
@@ -533,13 +557,12 @@ _e_devicemgr_viewport_cb_get_destination_mode(struct wl_client *client,
         return;
      }
 
-   viewport->type = DESTINATION_TYPE_MODE;
-   memset(&viewport->destination, 0, sizeof viewport->destination.mode);
+   memset(&viewport->destination.mode, 0, sizeof viewport->destination.mode);
 
    PIN("destination.mode created");
 
    viewport->destination.mode.resource = res;
-   viewport->destination.mode.type = TIZEN_DESTINATION_MODE_TYPE_LETTER_BOX;
+   viewport->destination.mode.type = TIZEN_DESTINATION_MODE_TYPE_NONE;
    viewport->destination.mode.ratio_h = -1.0;
    viewport->destination.mode.scale_h = -1.0;
    viewport->destination.mode.align_h = -1.0;
@@ -700,25 +723,43 @@ _destination_mode_calculate_origin_or_letter(int pw, int ph, int sw, int sh,
 }
 
 /* follow_parent_transform will be considered in only this function to get
- * the geometry of a subsurface. tx, ty, tw, th is specified in transform 0.
+ * the geometry of a surface. tx, ty, tw, th is specified in transform 0.
  */
 static Eina_Bool
 _destination_mode_calculate_destination(E_Viewport *viewport, Eina_Rectangle *rect)
 {
    E_Client *ec = viewport->ec;
-   E_Client *epc = viewport->epc;
-   E_Comp_Wl_Buffer_Viewport *vp = &ec->comp_data->scaler.buffer_viewport;
-   E_Comp_Wl_Buffer_Viewport *vpp = &epc->comp_data->scaler.buffer_viewport;
+   E_Comp_Wl_Buffer_Viewport *vp;
    int pw = 0, ph = 0, sw = 0, sh = 0;
    double rh = -1.0, rv = -1.0;
 
-   if (vpp->surface.width != -1)
+   vp = &ec->comp_data->scaler.buffer_viewport;
+
+   if (!viewport->epc)
      {
-        pw = vpp->surface.width;
-        ph = vpp->surface.height;
+        E_Zone *zone = e_comp_zone_xy_get(ec->x, ec->y);
+        pw = zone->w;
+        ph = zone->h;
      }
    else
-     e_pixmap_size_get(epc->pixmap, &pw, &ph);
+     {
+        E_Client *epc = viewport->epc;
+        E_Comp_Wl_Buffer_Viewport *vpp;
+
+        if (!epc->comp_data || e_object_is_del(E_OBJECT(epc)))
+          return EINA_FALSE;
+
+        vpp = &epc->comp_data->scaler.buffer_viewport;
+        if (vpp->surface.width != -1)
+          {
+             pw = vpp->surface.width;
+             ph = vpp->surface.height;
+          }
+        else
+          e_pixmap_size_get(epc->pixmap, &pw, &ph);
+     }
+
+   EINA_SAFETY_ON_FALSE_RETURN_VAL(pw > 0 && ph > 0, EINA_FALSE);
 
    if (viewport->source.w != -1)
      {
@@ -765,9 +806,9 @@ _destination_mode_calculate_destination(E_Viewport *viewport, Eina_Rectangle *re
       case TIZEN_DESTINATION_MODE_TYPE_ORIGIN_OR_LETTER:
          _destination_mode_calculate_origin_or_letter(pw, ph, sw, sh, rh, rv, rect);
          break;
-      default:
       case TIZEN_DESTINATION_MODE_TYPE_NONE:
-         PER("no mode");
+      default:
+         PER("no destination mode for tizen_viewport@%d", wl_resource_get_id(viewport->resource));
          return EINA_FALSE;
      }
 
@@ -874,48 +915,67 @@ _e_devicemgr_viewport_crop_by_parent(E_Viewport *viewport, Eina_Rectangle *paren
 
    if (viewport->source.w == -1)
      {
-        crop.x = crop.y = 0;
-        crop.w = bw;
-        crop.h = bh;
+        viewport->cropped_source.x = viewport->cropped_source.y = 0;
+        viewport->cropped_source.w = bw;
+        viewport->cropped_source.h = bh;
      }
    else
-     crop = viewport->source;
+     viewport->cropped_source = viewport->source;
 
    PDB("src(%d,%d %dx%d) ratio(%.2f,%.2f,%.2f,%.2f)",
-       EINA_RECTANGLE_ARGS(&crop), rx, ry, rw, rh);
+       EINA_RECTANGLE_ARGS(&viewport->cropped_source), rx, ry, rw, rh);
 
-   crop.x += crop.w * rx;
-   crop.y += crop.h * ry;
-   crop.w = crop.w * rw;
-   crop.h = crop.h * rh;
+   viewport->cropped_source.x += viewport->cropped_source.w * rx;
+   viewport->cropped_source.y += viewport->cropped_source.h * ry;
+   viewport->cropped_source.w = viewport->cropped_source.w * rw;
+   viewport->cropped_source.h = viewport->cropped_source.h * rh;
 
-   _source_transform_to_surface(bw, bh, vp->buffer.transform, 1, &crop, &crop);
+   _source_transform_to_surface(bw, bh, vp->buffer.transform, 1, &viewport->cropped_source, &viewport->cropped_source);
 
-   vp->buffer.src_x = wl_fixed_from_int(crop.x);
-   vp->buffer.src_y = wl_fixed_from_int(crop.y);
-   vp->buffer.src_width = wl_fixed_from_int(crop.w);
-   vp->buffer.src_height = wl_fixed_from_int(crop.h);
+   vp->buffer.src_x = wl_fixed_from_int(viewport->cropped_source.x);
+   vp->buffer.src_y = wl_fixed_from_int(viewport->cropped_source.y);
+   vp->buffer.src_width = wl_fixed_from_int(viewport->cropped_source.w);
+   vp->buffer.src_height = wl_fixed_from_int(viewport->cropped_source.h);
 
-   PDB("  => (%d,%d %dx%d)", EINA_RECTANGLE_ARGS(&crop));
+   PDB("  => (%d,%d %dx%d)", EINA_RECTANGLE_ARGS(&viewport->cropped_source));
 }
 
 static Eina_Bool
-_e_devicemgr_viewport_apply_destination(E_Viewport *viewport)
+_e_devicemgr_viewport_apply_destination(E_Viewport *viewport, Eina_Rectangle *rrect)
 {
    E_Client *ec = viewport->ec;
-   E_Client *epc = viewport->epc;
-   E_Comp_Wl_Buffer_Viewport *vp = &ec->comp_data->scaler.buffer_viewport;
-   E_Comp_Wl_Buffer_Viewport *vpp = &epc->comp_data->scaler.buffer_viewport;
+   E_Comp_Wl_Buffer_Viewport *vp;
    Eina_Rectangle dst, prect;
+   Eina_Bool changed = EINA_FALSE;
 
-   prect.x = prect.y = 0;
-   if (vpp->surface.width != -1)
+   vp = &ec->comp_data->scaler.buffer_viewport;
+   if (!viewport->epc)
      {
-        prect.w = vpp->surface.width;
-        prect.h = vpp->surface.height;
+        E_Zone *zone = e_comp_zone_xy_get(ec->x, ec->y);
+        prect.x = prect.y = 0;
+        prect.w = zone->w;
+        prect.h = zone->h;
      }
    else
-     e_pixmap_size_get(epc->pixmap, &prect.w, &prect.h);
+     {
+        E_Client *epc = viewport->epc;
+        E_Comp_Wl_Buffer_Viewport *vpp;
+
+        if (!epc->comp_data || e_object_is_del(E_OBJECT(epc)))
+          return EINA_FALSE;
+
+        vpp = &epc->comp_data->scaler.buffer_viewport;
+        prect.x = prect.y = 0;
+        if (vpp->surface.width != -1)
+          {
+             prect.w = vpp->surface.width;
+             prect.h = vpp->surface.height;
+          }
+        else
+          e_pixmap_size_get(epc->pixmap, &prect.w, &prect.h);
+     }
+
+   EINA_SAFETY_ON_FALSE_RETURN_VAL(prect.w > 0 && prect.h > 0, EINA_FALSE);
 
    switch (viewport->type)
      {
@@ -941,21 +1001,43 @@ _e_devicemgr_viewport_apply_destination(E_Viewport *viewport)
          return EINA_FALSE;
      }
 
-   PDB("destination(%d,%d %dx%d)", EINA_RECTANGLE_ARGS(&dst));
-
    _e_devicemgr_viewport_crop_by_parent(viewport, &prect, &dst);
 
-   PDB("epc(%p) %d,%d", epc, epc->x, epc->y);
-
    /* The values of below x, y, w, h are specified in the transform 0 and in the parent */
-   ec->comp_data->sub.data->position.x = dst.x;
-   ec->comp_data->sub.data->position.y = dst.y;
-   ec->comp_data->sub.data->position.set = EINA_TRUE;
+   if (ec->comp_data->sub.data)
+     {
+        if (ec->comp_data->sub.data->position.x != dst.x ||
+            ec->comp_data->sub.data->position.y != dst.y)
+          {
+             ec->comp_data->sub.data->position.x = dst.x;
+             ec->comp_data->sub.data->position.y = dst.y;
+             ec->comp_data->sub.data->position.set = EINA_TRUE;
+             vp->changed = changed = EINA_TRUE;
+          }
+     }
+   else
+     {
+        /* if toplevel surface, the x,y pos is decided by shell surface */
+        dst.x = ec->x;
+        dst.y = ec->y;
+     }
 
-   vp->surface.width = dst.w;
-   vp->surface.height = dst.h;
+   if (vp->surface.width != dst.w || vp->surface.height != dst.h)
+     {
+        vp->surface.width = dst.w;
+        vp->surface.height = dst.h;
+        vp->changed = changed = EINA_TRUE;
 
-   return EINA_TRUE;
+        ec->comp_data->pending.buffer_viewport = *vp;
+        if (ec->comp_data->sub.data)
+          ec->comp_data->sub.data->cached.buffer_viewport = *vp;
+     }
+
+   *rrect = dst;
+
+   PDB("apply destination: %d,%d %dx%d changed(%d)", EINA_RECTANGLE_ARGS(&dst), changed);
+
+   return changed;
 }
 
 static Eina_Bool
@@ -965,16 +1047,18 @@ _e_devicemgr_viewport_apply_source(E_Viewport *viewport)
    E_Comp_Wl_Buffer_Viewport *vp = &ec->comp_data->scaler.buffer_viewport;
    Eina_Rectangle rect = {0,};
    int bw = 0, bh = 0;
+   wl_fixed_t fx, fy, fw, fh;
+   Eina_Bool changed = EINA_FALSE;
 
-   if (viewport->source.w == -1)
-     return EINA_TRUE;
+   if (viewport->cropped_source.w == -1)
+     return EINA_FALSE;
 
    e_pixmap_size_get(ec->pixmap, &bw, &bh);
 
    rect.w = bw;
    rect.h = bh;
 
-   if (!eina_rectangle_intersection(&rect, &viewport->source))
+   if (!eina_rectangle_intersection(&rect, &viewport->cropped_source))
      {
         PER("source area is empty");
         return EINA_FALSE;
@@ -982,71 +1066,116 @@ _e_devicemgr_viewport_apply_source(E_Viewport *viewport)
 
    _source_transform_to_surface(bw, bh, vp->buffer.transform, 1, &rect, &rect);
 
-   PDB("source(%d,%d %dx%d) => (%d,%d %dx%d)",
-       EINA_RECTANGLE_ARGS(&viewport->source), EINA_RECTANGLE_ARGS(&rect));
+   fx = wl_fixed_from_int(rect.x);
+   fy = wl_fixed_from_int(rect.y);
+   fw = wl_fixed_from_int(rect.w);
+   fh = wl_fixed_from_int(rect.h);
 
-   vp->buffer.src_x = wl_fixed_from_int(rect.x);
-   vp->buffer.src_y = wl_fixed_from_int(rect.y);
-   vp->buffer.src_width = wl_fixed_from_int(rect.w);
-   vp->buffer.src_height = wl_fixed_from_int(rect.h);
+   if (vp->buffer.src_x != fx || vp->buffer.src_y != fy ||
+       vp->buffer.src_width != fw || vp->buffer.src_height != fh)
+     {
+        vp->buffer.src_x = wl_fixed_from_int(rect.x);
+        vp->buffer.src_y = wl_fixed_from_int(rect.y);
+        vp->buffer.src_width = wl_fixed_from_int(rect.w);
+        vp->buffer.src_height = wl_fixed_from_int(rect.h);
+        vp->changed = changed = EINA_TRUE;
 
-   return EINA_TRUE;
+        ec->comp_data->pending.buffer_viewport = *vp;
+        if (ec->comp_data->sub.data)
+          ec->comp_data->sub.data->cached.buffer_viewport = *vp;
+     }
+
+   PDB("apply source: %d,%d %dx%d orig(%d,%d %dx%d) changed(%d)",
+       EINA_RECTANGLE_ARGS(&rect), EINA_RECTANGLE_ARGS(&viewport->cropped_source), changed);
+
+   return changed;
 }
 
 static Eina_Bool
-_e_devicemgr_viewport_apply_transform(E_Viewport *viewport)
+_e_devicemgr_viewport_apply_transform(E_Viewport *viewport, int *rtransform)
 {
    E_Client *ec = viewport->ec;
    E_Comp_Wl_Buffer_Viewport *vp = &ec->comp_data->scaler.buffer_viewport;
+   Eina_Bool changed = EINA_FALSE;
+   int new_transform;
 
-   vp->buffer.transform = 0;
+   new_transform = viewport->transform;
 
    if (viewport->type == DESTINATION_TYPE_MODE &&
-       viewport->destination.mode.follow_parent_transform)
+       viewport->destination.mode.follow_parent_transform &&
+       viewport->epc)
      {
         E_Client *epc = viewport->epc;
-        E_Comp_Wl_Buffer_Viewport *vpp = &epc->comp_data->scaler.buffer_viewport;
+        E_Comp_Wl_Buffer_Viewport *vpp;
+
+        if (!epc->comp_data || e_object_is_del(E_OBJECT(epc)))
+          {
+             *rtransform = vp->buffer.transform;
+             return EINA_FALSE;
+          }
+
+        vpp = &epc->comp_data->scaler.buffer_viewport;
 
         PDB("parent's transform(%d) rot.ang.curr(%d)",
             vpp->buffer.transform, epc->e.state.rot.ang.curr/90);
 
-        vp->buffer.transform = vpp->buffer.transform;
-        vp->buffer.transform += (epc->e.state.rot.ang.curr / 90);
+        new_transform += vpp->buffer.transform;
+        new_transform += (epc->e.state.rot.ang.curr / 90);
      }
 
-   vp->buffer.transform += viewport->transform;
+   if (new_transform != vp->buffer.transform)
+     {
+        vp->buffer.transform = new_transform;
+        vp->changed = changed = EINA_TRUE;
 
-   PDB("transform(%d)", vp->buffer.transform);
+        ec->comp_data->pending.buffer_viewport = *vp;
+        if (ec->comp_data->sub.data)
+          ec->comp_data->sub.data->cached.buffer_viewport = *vp;
+     }
 
-   return EINA_TRUE;
+   PDB("apply transform: %d type(%d) follow(%d) changed(%d)",
+       vp->buffer.transform, viewport->type,
+       viewport->destination.mode.follow_parent_transform, changed);
+
+   *rtransform = vp->buffer.transform;
+
+   return changed;
 }
 
 static Eina_Bool
 _e_devicemgr_viewport_apply(E_Client *ec)
 {
    E_Viewport *viewport;
-   E_Client *epc;
+   Eina_Bool changed = EINA_FALSE;
+   Eina_Rectangle rrect = {0,};
+   int rtransform = 0;
 
-   /* not interested if it's not a subsurface */
-   if (!ec || !ec->comp_data || !ec->comp_data->sub.data)
+   if (!ec || !ec->comp_data)
      return EINA_TRUE;
 
-   epc = ec->comp_data->sub.data->parent;
-   if (!_e_devicemgr_viewport_apply(epc))
-     return EINA_FALSE;
+   if (ec->comp_data->sub.data && ec->comp_data->sub.data->parent)
+     if (!_e_devicemgr_viewport_apply(ec->comp_data->sub.data->parent))
+       return EINA_FALSE;
 
    viewport = _e_devicemgr_viewport_get_viewport(ec->comp_data->scaler.viewport);
 
    /* not interested if it's not tizen_viewport */
    if (!viewport) return EINA_TRUE;
 
-   if (!_e_devicemgr_viewport_apply_transform(viewport)) return EINA_FALSE;
-   if (!_e_devicemgr_viewport_apply_destination(viewport)) return EINA_FALSE;
-   if (!_e_devicemgr_viewport_apply_source(viewport)) return EINA_FALSE;
+   changed |= _e_devicemgr_viewport_apply_transform(viewport, &rtransform);
+   changed |= _e_devicemgr_viewport_apply_destination(viewport, &rrect);
+   changed |= _e_devicemgr_viewport_apply_source(viewport);
+   if (!changed) return EINA_TRUE;
 
    e_comp_wl_map_size_cal_from_buffer(viewport->ec);
    e_comp_wl_map_size_cal_from_viewport(viewport->ec);
    e_comp_wl_map_apply(viewport->ec);
+
+   PDB("send destination_changed: transform(%d) x(%d) y(%d) w(%d) h(%d)",
+       rtransform, rrect.x, rrect.y, rrect.w, rrect.h);
+
+   tizen_viewport_send_destination_changed(viewport->resource, rtransform,
+                                           rrect.x, rrect.y, rrect.w, rrect.h);
 
    return EINA_TRUE;
 }
@@ -1055,14 +1184,6 @@ static void
 _e_devicemgr_viewport_cb_surface_destroy(struct wl_listener *listener, void *data)
 {
    E_Viewport *viewport = container_of(listener, E_Viewport, surface_destroy_listener);
-
-   _destroy_viewport(viewport);
-}
-
-static void
-_e_devicemgr_viewport_cb_subsurface_destroy(struct wl_listener *listener, void *data)
-{
-   E_Viewport *viewport = container_of(listener, E_Viewport, subsurface_destroy_listener);
 
    _destroy_viewport(viewport);
 }
@@ -1081,7 +1202,12 @@ _e_devicemgr_viewport_cb_apply_viewport(struct wl_listener *listener, void *data
      }
 
    if (!viewport->changed) return;
+   if (!e_pixmap_resource_get(ec->pixmap)) return;
+   if (viewport->epc && !e_pixmap_resource_get(viewport->epc->pixmap)) return;
+
    viewport->changed = EINA_FALSE;
+
+   PDB("apply");
 
    if (!_e_devicemgr_viewport_apply(ec))
      {
@@ -1090,8 +1216,6 @@ _e_devicemgr_viewport_cb_apply_viewport(struct wl_listener *listener, void *data
      }
 
    vp->changed = EINA_TRUE;
-
-   PDB("apply");
 }
 
 static void
@@ -1153,38 +1277,31 @@ _e_devicemgr_viewport_cb_topmost_rotate(void *data, int type, void *event)
 Eina_Bool
 e_devicemgr_viewport_create(struct wl_resource *resource,
                             uint32_t id,
-                            struct wl_resource *subsurface)
+                            struct wl_resource *surface)
 {
-   E_Client *ec = wl_resource_get_user_data(subsurface);
+   E_Client *ec = wl_resource_get_user_data(surface);
    int version = wl_resource_get_version(resource);
    struct wl_client *client;
    struct wl_resource *res;
    E_Viewport *viewport;
 
-   if (!ec || !ec->comp_data || !ec->comp_data->sub.data || !ec->comp_data->surface)
+   if (!ec || !ec->comp_data || e_object_is_del(E_OBJECT(ec)) || !ec->comp_data->surface)
      {
-        ERR("wrong resource %d", wl_resource_get_id(subsurface));
-        return EINA_FALSE;
-     }
-
-   if (!ec->comp_data->sub.data->parent)
-     {
-        ERR("wl_subsurface@%d doesn't have a parent surface",
-            wl_resource_get_id(subsurface));
+        ERR("wrong resource %d", wl_resource_get_id(surface));
         return EINA_FALSE;
      }
 
    if (ec->comp_data->scaler.viewport)
      {
-        ERR("wl_subsurface@%d already has a viewport",
-            wl_resource_get_id(subsurface));
+        ERR("wl_surface@%d already has a viewport",
+            wl_resource_get_id(surface));
         return EINA_FALSE;
      }
 
-   if (!(client = wl_resource_get_client(subsurface)))
+   if (!(client = wl_resource_get_client(surface)))
      {
-        ERR("Could not get client from wl_subsurface@%d",
-            wl_resource_get_id(subsurface));
+        ERR("Could not get client from wl_surface@%d",
+            wl_resource_get_id(surface));
         return EINA_FALSE;
      }
 
@@ -1205,7 +1322,7 @@ e_devicemgr_viewport_create(struct wl_resource *resource,
 
    viewport->resource = res;
    viewport->ec = ec;
-   viewport->epc = ec->comp_data->sub.data->parent;
+   viewport->epc = (ec->comp_data->sub.data) ? ec->comp_data->sub.data->parent : NULL;
    viewport->topmost = _topmost_parent_get(ec);
    viewport->window = e_client_util_win_get(ec);
 
@@ -1224,6 +1341,7 @@ e_devicemgr_viewport_create(struct wl_resource *resource,
                                   _e_devicemgr_viewport_cb_topmost_move, viewport);
 
    viewport->source.w = -1;
+   viewport->cropped_source.w = -1;
 
    viewport->surface_apply_viewport_listener.notify = _e_devicemgr_viewport_cb_apply_viewport;
    wl_signal_add(&ec->comp_data->apply_viewport_signal, &viewport->surface_apply_viewport_listener);
@@ -1235,9 +1353,6 @@ e_devicemgr_viewport_create(struct wl_resource *resource,
 
    viewport->surface_destroy_listener.notify = _e_devicemgr_viewport_cb_surface_destroy;
    wl_resource_add_destroy_listener(ec->comp_data->surface, &viewport->surface_destroy_listener);
-
-   viewport->subsurface_destroy_listener.notify = _e_devicemgr_viewport_cb_subsurface_destroy;
-   wl_resource_add_destroy_listener(subsurface, &viewport->subsurface_destroy_listener);
 
    PIN("tizen_viewport@%d ec(%p) epc(%p) created", id, viewport->ec, viewport->epc);
 
