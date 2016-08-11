@@ -649,6 +649,7 @@ _e_input_devmgr_cb_block_events(struct wl_client *client, struct wl_resource *re
      }
 
    _e_input_devmgr_request_client_add(client, resource, clas, duration);
+   tizen_input_device_manager_send_error(resource, TIZEN_INPUT_DEVICE_MANAGER_ERROR_NONE);
 
    /* TODO: Release pressed button or key */
 }
@@ -672,6 +673,7 @@ _e_input_devmgr_cb_unblock_events(struct wl_client *client, struct wl_resource *
     }
 
    _e_input_devmgr_request_client_remove(client);
+   tizen_input_device_manager_send_error(resource, TIZEN_INPUT_DEVICE_MANAGER_ERROR_NONE);
 }
 
 typedef struct _keycode_map{
@@ -859,6 +861,10 @@ _e_input_devmgr_cb_init_generator(struct wl_client *client, struct wl_resource *
         close(uinp_fd);
         ret = TIZEN_INPUT_DEVICE_MANAGER_ERROR_NO_SYSTEM_RESOURCES;
         goto finish;
+     }
+   else
+     {
+        ret = TIZEN_INPUT_DEVICE_MANAGER_ERROR_NONE;
      }
    if (ioctl(uinp_fd, UI_DEV_CREATE))
      {
