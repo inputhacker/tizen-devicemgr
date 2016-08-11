@@ -1164,13 +1164,6 @@ _e_input_devmgr_cb_pointer_warp(struct wl_client *client, struct wl_resource *re
         return;
      }
 
-   if (e_pointer_is_hidden(e_comp->pointer))
-     {
-        DMDBG("The pointer is hidden !\n");
-        tizen_input_device_manager_send_error(resource, TIZEN_INPUT_DEVICE_MANAGER_ERROR_NO_POINTER_AVAILABLE);
-        return;
-     }
-
    if (ec != e_comp_wl->ptr.ec)
      {
         DMDBG("Pointer is not on the given surface  !\n");
