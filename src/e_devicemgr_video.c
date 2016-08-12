@@ -78,7 +78,7 @@ struct _E_Video
    Eina_List  *waiting_list;
    E_Video_Fb *current_fb;
 
-   Eina_Bool  punched;
+   Eina_Bool  need_punch;
    Eina_Bool  cb_registered;
    Eina_Rectangle eo_geo;
 };
@@ -859,7 +859,7 @@ _e_video_frame_buffer_show(E_Video *video, E_Video_Fb *vfb)
    ret = tdm_output_commit(video->output, 0, _e_video_commit_handler, video);
    EINA_SAFETY_ON_FALSE_GOTO(ret == TDM_ERROR_NONE, show_fail);
 
-   if (!video->punched)
+   if (video->need_punch)
      {
        E_Client *topmost = find_topmost_parent_get(video->ec);
        Eina_Bool do_punch = EINA_TRUE;
@@ -886,20 +886,20 @@ _e_video_frame_buffer_show(E_Video *video, E_Video_Fb *vfb)
        if (do_punch)
          {
             e_comp_object_mask_set(video->ec->frame, EINA_TRUE);
-            video->punched = EINA_TRUE;
+            video->need_punch = EINA_FALSE;
             VIN("punched");
          }
      }
 
    VDT("Client(%s):PID(%d) RscID(%d), Buffer(%p, refcnt:%d) is shown."
        "Geometry details are : buffer size(%dx%d) src(%d,%d, %dx%d)"
-       " dst(%d,%d, %dx%d), transform(%d), punched(%d)",
+       " dst(%d,%d, %dx%d), transform(%d), need_punch(%d)",
        e_client_util_name_get(video->ec) ?: "No Name" , video->ec->netwm.pid,
        wl_resource_get_id(video->surface), vfb->mbuf, vfb->mbuf->ref_cnt,
        info.src_config.size.h, info.src_config.size.v, info.src_config.pos.x,
        info.src_config.pos.y, info.src_config.pos.w, info.src_config.pos.h,
        info.dst_pos.x, info.dst_pos.y, info.dst_pos.w, info.dst_pos.h, info.transform,
-       video->punched);
+       video->need_punch);
 
 
    return EINA_TRUE;
@@ -1010,6 +1010,7 @@ _e_video_set(E_Video *video, E_Client *ec)
    int pminw = -1, pminh = -1, pmaxw = -1, pmaxh = -1;
    int i, count = 0;
    const tdm_prop *props;
+   E_Client *topmost;
    tdm_error ret;
 
    if (!video || !ec)
@@ -1022,6 +1023,10 @@ _e_video_set(E_Video *video, E_Client *ec)
      }
 
    EINA_SAFETY_ON_TRUE_RETURN(e_object_is_del(E_OBJECT(ec)));
+
+   topmost = find_topmost_parent_get(ec);
+   if (topmost && topmost->argb)
+     video->need_punch = EINA_TRUE;
 
    video->ec = ec;
    video->window = e_client_util_win_get(ec);
@@ -1516,7 +1521,7 @@ _e_devicemgr_video_object_destroy(struct wl_resource *resource)
        video->geo.input_w, video->geo.input_h, video->geo.input_r.x ,
        video->geo.input_r.y, video->geo.input_r.w, video->geo.input_r.h,
        video->geo.output_r.x ,video->geo.output_r.y, video->geo.output_r.w,
-       video->geo.output_r.h, video->geo.transform, video->punched);
+       video->geo.output_r.h, video->geo.transform, video->need_punch);
 
    _e_video_destroy(video);
 }
