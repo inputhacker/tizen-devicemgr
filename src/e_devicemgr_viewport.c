@@ -856,14 +856,60 @@ _destination_mode_calculate_destination(E_Viewport *viewport, Eina_Rectangle *re
         rect->h = new_h;
      }
 
+   PDB("(%d,%d %dx%d)", EINA_RECTANGLE_ARGS(rect));
+
    if (viewport->destination.mode.align_h != -1.0)
      {
+        E_Client *epc = viewport->epc;
         double h = viewport->destination.mode.align_h;
         double v = viewport->destination.mode.align_v;
         int dx, dy;
 
-        if (vp->buffer.transform % 2)
-          SWAP(h, v);
+        if (epc)
+          {
+             E_Comp_Wl_Buffer_Viewport *vpp;
+
+             if (!epc->comp_data || e_object_is_del(E_OBJECT(epc)))
+               return EINA_FALSE;
+
+             vpp = &epc->comp_data->scaler.buffer_viewport;
+
+             PDB("parent's transform(%d)", vpp->buffer.transform);
+
+             switch (vpp->buffer.transform)
+               {
+                default:
+                case WL_OUTPUT_TRANSFORM_NORMAL:
+                  break;
+                case WL_OUTPUT_TRANSFORM_90:
+                  SWAP(h, v);
+                  v = 1.0 - v;
+                  break;
+                case WL_OUTPUT_TRANSFORM_180:
+                  h = 1.0 - h;
+                  v = 1.0 - v;
+                  break;
+                case WL_OUTPUT_TRANSFORM_270:
+                  SWAP(h, v);
+                  h = 1.0 - h;
+                  break;
+                case WL_OUTPUT_TRANSFORM_FLIPPED:
+                  h = 1.0 - h;
+                  break;
+                case WL_OUTPUT_TRANSFORM_FLIPPED_90:
+                  SWAP(h, v);
+                  h = 1.0 - h;
+                  v = 1.0 - v;
+                  break;
+                  break;
+                case WL_OUTPUT_TRANSFORM_FLIPPED_180:
+                  v = 1.0 - v;
+                  break;
+                case WL_OUTPUT_TRANSFORM_FLIPPED_270:
+                  SWAP(h, v);
+                  break;
+               }
+          }
 
         dx = (pw - rect->w) * (h - 0.5);
         dy = (ph - rect->h) * (v - 0.5);
@@ -871,6 +917,8 @@ _destination_mode_calculate_destination(E_Viewport *viewport, Eina_Rectangle *re
         rect->x += dx;
         rect->y += dy;
      }
+
+   PDB("(%d,%d %dx%d)", EINA_RECTANGLE_ARGS(rect));
 
    if (viewport->destination.mode.offset_x != 0 ||
        viewport->destination.mode.offset_y != 0 ||
@@ -894,7 +942,7 @@ _destination_mode_calculate_destination(E_Viewport *viewport, Eina_Rectangle *re
         rect->h += h;
      }
 
-   PDB(" => (%d,%d %dx%d)", EINA_RECTANGLE_ARGS(rect));
+   PDB("(%d,%d %dx%d)", EINA_RECTANGLE_ARGS(rect));
 
    return EINA_TRUE;
 }
@@ -1130,6 +1178,7 @@ _e_devicemgr_viewport_apply_transform(E_Viewport *viewport, int *rtransform)
      {
         E_Client *epc = viewport->epc;
         E_Comp_Wl_Buffer_Viewport *vpp;
+        unsigned int parent_transform;
 
         if (!epc->comp_data || e_object_is_del(E_OBJECT(epc)))
           {
@@ -1142,8 +1191,20 @@ _e_devicemgr_viewport_apply_transform(E_Viewport *viewport, int *rtransform)
         PDB("parent's transform(%d) rot.ang.curr(%d)",
             vpp->buffer.transform, epc->e.state.rot.ang.curr/90);
 
-        new_transform += vpp->buffer.transform;
-        new_transform += (epc->e.state.rot.ang.curr / 90);
+        parent_transform = (epc->e.state.rot.ang.curr / 90) + vpp->buffer.transform;
+
+        if (parent_transform >= WL_OUTPUT_TRANSFORM_FLIPPED)
+          PER("need to use matrix to calculate the correct destination in this case");
+
+        if (new_transform < WL_OUTPUT_TRANSFORM_FLIPPED)
+          new_transform = (parent_transform + new_transform) % 4;
+        else
+          {
+             if (parent_transform % 2)
+               new_transform = (4 - parent_transform + new_transform) % 4 + 4;
+             else
+               new_transform = (parent_transform + new_transform) % 4 + 4;
+          }
      }
 
    if (new_transform != vp->buffer.transform)
