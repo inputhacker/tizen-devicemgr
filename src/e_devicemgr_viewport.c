@@ -584,6 +584,29 @@ static const struct tizen_viewport_interface _e_devicemgr_viewport_interface =
 };
 
 static void
+_buffer_size_get(E_Pixmap *pixmap, int *bw, int *bh)
+{
+   E_Comp_Wl_Buffer *buffer = e_pixmap_resource_get(pixmap);
+
+   *bw = *bh = 0;
+
+   if (!buffer) return;
+
+   if (buffer->type == E_COMP_WL_BUFFER_TYPE_VIDEO)
+     {
+        tbm_surface_h tbm_surface = wayland_tbm_server_get_surface(NULL, buffer->resource);
+
+        *bw = tbm_surface_get_width(tbm_surface);
+        *bh = tbm_surface_get_height(tbm_surface);
+     }
+   else
+     {
+        *bw = buffer->w;
+        *bh = buffer->h;
+     }
+}
+
+static void
 _source_transform_coord(int width, int height, int trans, int scale, float ox, float oy, float *tx, float *ty)
 {
    switch (trans)
@@ -756,7 +779,7 @@ _destination_mode_calculate_destination(E_Viewport *viewport, Eina_Rectangle *re
              ph = vpp->surface.height;
           }
         else
-          e_pixmap_size_get(epc->pixmap, &pw, &ph);
+          _buffer_size_get(epc->pixmap, &pw, &ph);
      }
 
    EINA_SAFETY_ON_FALSE_RETURN_VAL(pw > 0 && ph > 0, EINA_FALSE);
@@ -767,7 +790,7 @@ _destination_mode_calculate_destination(E_Viewport *viewport, Eina_Rectangle *re
         sh = viewport->source.h;
      }
    else
-     e_pixmap_size_get(ec->pixmap, &sw, &sh);
+     _buffer_size_get(ec->pixmap, &sw, &sh);
 
    if (vp->buffer.transform % 2)
       SWAP(sw, sh);
@@ -911,7 +934,7 @@ _e_devicemgr_viewport_crop_by_parent(E_Viewport *viewport, Eina_Rectangle *paren
 
    PDB("  => (%d,%d %dx%d)", EINA_RECTANGLE_ARGS(dst));
 
-   e_pixmap_size_get(viewport->ec->pixmap, &bw, &bh);
+   _buffer_size_get(viewport->ec->pixmap, &bw, &bh);
 
    if (viewport->source.w == -1)
      {
@@ -972,7 +995,7 @@ _e_devicemgr_viewport_apply_destination(E_Viewport *viewport, Eina_Rectangle *rr
              prect.h = vpp->surface.height;
           }
         else
-          e_pixmap_size_get(epc->pixmap, &prect.w, &prect.h);
+          _buffer_size_get(epc->pixmap, &prect.w, &prect.h);
      }
 
    EINA_SAFETY_ON_FALSE_RETURN_VAL(prect.w > 0 && prect.h > 0, EINA_FALSE);
@@ -1053,7 +1076,7 @@ _e_devicemgr_viewport_apply_source(E_Viewport *viewport)
    if (viewport->cropped_source.w == -1)
      return EINA_FALSE;
 
-   e_pixmap_size_get(ec->pixmap, &bw, &bh);
+   _buffer_size_get(ec->pixmap, &bw, &bh);
 
    rect.w = bw;
    rect.h = bh;

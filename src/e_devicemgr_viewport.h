@@ -7,6 +7,7 @@
 #include "e_mod_main.h"
 #include "e_devicemgr_privates.h"
 #include <wayland-server.h>
+#include <wayland-tbm-server.h>
 
 int e_devicemgr_viewport_init(void);
 void e_devicemgr_viewport_fini(void);
