@@ -515,6 +515,9 @@ _e_tz_screenmirror_buffer_cb_destroy(struct wl_listener *listener, void *data)
    if (buffer->in_use)
      NEVER_GET_HERE();
 
+   if (mirror != keep_mirror)
+     return;
+
    /* then, dequeue and send dequeue event */
    _e_tz_screenmirror_buffer_dequeue(buffer);
 
