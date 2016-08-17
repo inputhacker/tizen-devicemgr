@@ -507,16 +507,9 @@ _e_tz_screenmirror_buffer_dequeue(E_Mirror_Buffer *buffer)
 }
 
 static void
-_e_tz_screenmirror_buffer_cb_destroy(struct wl_listener *listener, void *data)
+_e_tz_screenmirror_buffer_free(E_Mirror_Buffer *buffer)
 {
-   E_Mirror_Buffer *buffer = container_of(listener, E_Mirror_Buffer, destroy_listener);
    E_Mirror *mirror = buffer->mirror;
-
-   if (buffer->in_use)
-     NEVER_GET_HERE();
-
-   if (mirror != keep_mirror)
-     return;
 
    /* then, dequeue and send dequeue event */
    _e_tz_screenmirror_buffer_dequeue(buffer);
@@ -528,6 +521,14 @@ _e_tz_screenmirror_buffer_cb_destroy(struct wl_listener *listener, void *data)
 
    mirror->buffer_clear_check = eina_list_remove(mirror->buffer_clear_check, buffer->mbuf);
    E_FREE(buffer);
+}
+
+static void
+_e_tz_screenmirror_buffer_cb_destroy(struct wl_listener *listener, void *data)
+{
+   E_Mirror_Buffer *buffer = container_of(listener, E_Mirror_Buffer, destroy_listener);
+
+   _e_tz_screenmirror_buffer_free(buffer);
 }
 
 static E_Mirror_Buffer*
@@ -729,7 +730,7 @@ _e_tz_screenmirror_destroy(E_Mirror *mirror)
    EINA_LIST_FREE(mirror->buffer_clear_check, mbuf);
 
    EINA_LIST_FOREACH_SAFE(mirror->buffer_queue, l, ll, buffer)
-     _e_tz_screenmirror_buffer_dequeue(buffer);
+     _e_tz_screenmirror_buffer_free(buffer);
 
    EINA_LIST_FOREACH_SAFE(mirror->ui_buffer_list, l, ll, mbuf)
      e_devmgr_buffer_unref(mbuf);
@@ -954,7 +955,7 @@ _e_screenshooter_cb_shoot(struct wl_client *client,
    else
      _e_tz_screenmirror_dump_still(buffer);
 
-   _e_tz_screenmirror_buffer_dequeue(buffer);
+   _e_tz_screenmirror_buffer_free(buffer);
    _e_tz_screenmirror_destroy(mirror);
 }
 
