@@ -1022,6 +1022,10 @@ _e_devicemgr_viewport_apply_destination(E_Viewport *viewport, Eina_Rectangle *rr
    if (!viewport->epc)
      {
         E_Zone *zone = e_comp_zone_xy_get(ec->x, ec->y);
+
+        if (zone == NULL)
+          return EINA_FALSE;
+
         prect.x = prect.y = 0;
         prect.w = zone->w;
         prect.h = zone->h;
