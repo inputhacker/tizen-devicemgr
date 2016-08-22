@@ -203,8 +203,7 @@ _e_devicemgr_destination_mode_cb_set(struct wl_client *client,
 
    if (!viewport) return;
 
-   if (type < TIZEN_DESTINATION_MODE_TYPE_NONE ||
-       type > TIZEN_DESTINATION_MODE_TYPE_ORIGIN_OR_LETTER)
+   if (type > TIZEN_DESTINATION_MODE_TYPE_ORIGIN_OR_LETTER)
      {
         PER("invalid param: type(%d)", type);
         return;
