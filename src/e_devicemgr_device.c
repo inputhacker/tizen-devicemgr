@@ -271,10 +271,20 @@ _e_devicemgr_add_device(const char *name, const char *identifier, const char *se
 
    e_comp_wl->input_device_manager.device_list = eina_list_append(e_comp_wl->input_device_manager.device_list, dev);
 
-   if ((!input_devmgr_data->inputgen.uinp_identifier) &&
+   if ((!input_devmgr_data->inputgen.kbd.uinp_identifier) && (dev->clas == ECORE_DEVICE_CLASS_KEYBOARD) &&
        (dev->name && !strncmp(dev->name, "Input Generator", sizeof("Input Generator"))))
      {
-        input_devmgr_data->inputgen.uinp_identifier = (char *)eina_stringshare_add(identifier);
+        input_devmgr_data->inputgen.kbd.uinp_identifier = (char *)eina_stringshare_add(identifier);
+     }
+   if ((!input_devmgr_data->inputgen.ptr.uinp_identifier) && (dev->clas == ECORE_DEVICE_CLASS_MOUSE) &&
+       (dev->name && !strncmp(dev->name, "Input Generator", sizeof("Input Generator"))))
+     {
+        input_devmgr_data->inputgen.ptr.uinp_identifier = (char *)eina_stringshare_add(identifier);
+     }
+   if ((!input_devmgr_data->inputgen.touch.uinp_identifier) && (dev->clas == ECORE_DEVICE_CLASS_TOUCH) &&
+       (dev->name && !strncmp(dev->name, "Input Generator", sizeof("Input Generator"))))
+     {
+        input_devmgr_data->inputgen.touch.uinp_identifier = (char *)eina_stringshare_add(identifier);
      }
 
    if ((!input_devmgr_data->detent.identifier) &&
@@ -747,16 +757,48 @@ _e_input_devmgr_keycode_from_string(const char *keyname)
 }
 
 static void
-_e_input_devmgr_inputgen_generator_remove(void)
+_e_input_devmgr_inputgen_generator_remove_keyboard(void)
 {
-   if (input_devmgr_data->inputgen.uinp_fd < 0)
+   if (input_devmgr_data->inputgen.kbd.uinp_fd < 0)
      {
         DMWRN("There are no devices created for input generation.\n");
         return;
      }
 
-   close(input_devmgr_data->inputgen.uinp_fd);
-   input_devmgr_data->inputgen.uinp_fd = -1;
+   close(input_devmgr_data->inputgen.kbd.uinp_fd);
+   input_devmgr_data->inputgen.kbd.uinp_fd = -1;
+   eina_stringshare_del(input_devmgr_data->inputgen.kbd.uinp_identifier);
+   input_devmgr_data->inputgen.kbd.uinp_identifier = NULL;
+}
+
+static void
+_e_input_devmgr_inputgen_generator_remove_mouse(void)
+{
+   if (input_devmgr_data->inputgen.ptr.uinp_fd < 0)
+     {
+        DMWRN("There are no devices created for input generation.\n");
+        return;
+     }
+
+   close(input_devmgr_data->inputgen.ptr.uinp_fd);
+   input_devmgr_data->inputgen.ptr.uinp_fd = -1;
+   eina_stringshare_del(input_devmgr_data->inputgen.ptr.uinp_identifier);
+   input_devmgr_data->inputgen.ptr.uinp_identifier = NULL;
+}
+
+static void
+_e_input_devmgr_inputgen_generator_remove_touch(void)
+{
+   if (input_devmgr_data->inputgen.touch.uinp_fd < 0)
+     {
+        DMWRN("There are no devices created for input generation.\n");
+        return;
+     }
+
+   close(input_devmgr_data->inputgen.touch.uinp_fd);
+   input_devmgr_data->inputgen.touch.uinp_fd = -1;
+   eina_stringshare_del(input_devmgr_data->inputgen.touch.uinp_identifier);
+   input_devmgr_data->inputgen.touch.uinp_identifier = NULL;
 }
 
 static void
@@ -767,7 +809,9 @@ _e_input_devmgr_inputgen_client_cb_destroy(struct wl_listener *l, void *data)
    input_devmgr_data->inputgen.ref--;
    if (input_devmgr_data->inputgen.ref == 0)
      {
-        _e_input_devmgr_inputgen_generator_remove();
+        _e_input_devmgr_inputgen_generator_remove_keyboard();
+        _e_input_devmgr_inputgen_generator_remove_mouse();
+        _e_input_devmgr_inputgen_generator_remove_touch();
      }
 
    wl_list_remove(&l->link);
@@ -790,50 +834,111 @@ _e_input_devmgr_inputgen_client_add(struct wl_client *client)
       eina_list_append(input_devmgr_data->inputgen.clients, client);
 }
 
-static void
-_e_input_devmgr_cb_init_generator(struct wl_client *client, struct wl_resource *resource)
+static Eina_Bool
+_e_input_devmgr_create_keyboard_device(void)
 {
    int uinp_fd = -1;
    struct uinput_user_dev *uinp = &input_devmgr_data->inputgen.uinp;
    int ret = -1;
 
-#ifdef ENABLE_CYNARA
-   if (EINA_FALSE == _e_devicemgr_util_do_privilege_check(client, wl_client_get_fd(client), "http://tizen.org/privilege/inputgenerator"))
+   uinp_fd = open("/dev/uinput", O_WRONLY | O_NDELAY);
+   if ( uinp_fd < 0)
      {
-        DMERR("_e_input_devmgr_cb_init_generator:priv check failed");
-        ret = TIZEN_INPUT_DEVICE_MANAGER_ERROR_NO_PERMISSION;
-        goto finish;
+        DMWRN("Failed to open /dev/uinput: (%d)\n", uinp_fd);
+        return EINA_FALSE;
      }
-#endif
 
-   if (input_devmgr_data->inputgen.uinp_fd > 0)
+   ioctl(uinp_fd, UI_SET_EVBIT, EV_KEY);
+   ioctl(uinp_fd, UI_SET_EVBIT, EV_SYN);
+   ioctl(uinp_fd, UI_SET_EVBIT, EV_MSC);
+
+   ioctl(uinp_fd, UI_SET_MSCBIT, MSC_SCAN);
+   ioctl(uinp_fd, UI_SET_KEYBIT, KEY_ESC);
+
+   ret = write(uinp_fd, uinp, sizeof(struct uinput_user_dev));
+   if (ret < 0)
      {
-        input_devmgr_data->inputgen.ref++;
-        _e_input_devmgr_inputgen_client_add(client);
-        ret = TIZEN_INPUT_DEVICE_MANAGER_ERROR_NONE;
-        goto finish;
+        DMWRN("mouse Failed to write UINPUT device\n");
+        close(uinp_fd);
+        return EINA_FALSE;
      }
+   if (ioctl(uinp_fd, UI_DEV_CREATE))
+     {
+        DMWRN("mouse Unable to create UINPUT device\n");
+        close(uinp_fd);
+        return EINA_FALSE;
+     }
+
+   input_devmgr_data->inputgen.kbd.uinp_fd = uinp_fd;
+
+   return EINA_TRUE;
+}
+
+static Eina_Bool
+_e_input_devmgr_create_mouse_device(void)
+{
+   int uinp_fd = -1;
+   struct uinput_user_dev *uinp = &input_devmgr_data->inputgen.uinp;
+   int ret = -1;
 
    uinp_fd = open("/dev/uinput", O_WRONLY | O_NDELAY);
    if ( uinp_fd < 0)
      {
         DMWRN("Failed to open /dev/uinput: (%d)\n", uinp_fd);
-        ret = TIZEN_INPUT_DEVICE_MANAGER_ERROR_NO_SYSTEM_RESOURCES;
-        goto finish;
+        return EINA_FALSE;
      }
 
-   memset(uinp, 0, sizeof(struct uinput_user_dev));
-   input_devmgr_data->inputgen.uinp_fd = -1;
-   strncpy(uinp->name, "Input Generator", UINPUT_MAX_NAME_SIZE);
-   uinp->id.version = 4;
-   uinp->id.bustype = BUS_USB;
+   ioctl(uinp_fd, UI_SET_EVBIT, EV_KEY);
+   ioctl(uinp_fd, UI_SET_EVBIT, EV_SYN);
+   ioctl(uinp_fd, UI_SET_EVBIT, EV_MSC);
+   ioctl(uinp_fd, UI_SET_EVBIT, EV_REL);
+
+   ioctl(uinp_fd, UI_SET_MSCBIT, MSC_SCAN);
+
+   ioctl(uinp_fd, UI_SET_KEYBIT, BTN_LEFT);
+   ioctl(uinp_fd, UI_SET_RELBIT, BTN_RIGHT);
+   ioctl(uinp_fd, UI_SET_RELBIT, BTN_MIDDLE);
+   ioctl(uinp_fd, UI_SET_RELBIT, REL_X);
+   ioctl(uinp_fd, UI_SET_RELBIT, REL_Y);
+   ioctl(uinp_fd, UI_SET_RELBIT, REL_WHEEL);
+
+   ret = write(uinp_fd, uinp, sizeof(struct uinput_user_dev));
+   if (ret < 0)
+     {
+        DMWRN("mouse Failed to write UINPUT device\n");
+        close(uinp_fd);
+        return EINA_FALSE;
+     }
+   if (ioctl(uinp_fd, UI_DEV_CREATE))
+     {
+        DMWRN("mouse Unable to create UINPUT device\n");
+        close(uinp_fd);
+        return EINA_FALSE;
+     }
+
+   input_devmgr_data->inputgen.ptr.uinp_fd = uinp_fd;
+
+   return EINA_TRUE;
+}
+
+static Eina_Bool
+_e_input_devmgr_create_touch_device(void)
+{
+   int uinp_fd = -1;
+   struct uinput_user_dev *uinp = &input_devmgr_data->inputgen.uinp;
+   int ret = -1;
+
+   uinp_fd = open("/dev/uinput", O_WRONLY | O_NDELAY);
+   if ( uinp_fd < 0)
+     {
+        DMWRN("Failed to open /dev/uinput: (%d)\n", uinp_fd);
+        return EINA_FALSE;
+     }
 
    ioctl(uinp_fd, UI_SET_EVBIT, EV_KEY);
    ioctl(uinp_fd, UI_SET_EVBIT, EV_SYN);
    ioctl(uinp_fd, UI_SET_EVBIT, EV_MSC);
    ioctl(uinp_fd, UI_SET_EVBIT, EV_ABS);
-
-   ioctl(uinp_fd, UI_SET_KEYBIT, KEY_ESC);
 
    ioctl(uinp_fd, UI_SET_KEYBIT, BTN_TOUCH);
    ioctl(uinp_fd, UI_SET_ABSBIT, ABS_X);
@@ -848,24 +953,12 @@ _e_input_devmgr_cb_init_generator(struct wl_client *client, struct wl_resource *
 
    ioctl(uinp_fd, UI_SET_MSCBIT, MSC_SCAN);
 
-   ioctl(uinp_fd, UI_SET_KEYBIT, BTN_TOUCH);
-   ioctl(uinp_fd, UI_SET_ABSBIT, ABS_X);
-   ioctl(uinp_fd, UI_SET_ABSBIT, ABS_Y);
-   ioctl(uinp_fd, UI_SET_ABSBIT, ABS_MT_SLOT);
-   ioctl(uinp_fd, UI_SET_ABSBIT, ABS_MT_TOUCH_MAJOR);
-   ioctl(uinp_fd, UI_SET_ABSBIT, ABS_MT_TOUCH_MINOR);
-   ioctl(uinp_fd, UI_SET_ABSBIT, ABS_MT_WIDTH_MAJOR);
-   ioctl(uinp_fd, UI_SET_ABSBIT, ABS_MT_POSITION_X);
-   ioctl(uinp_fd, UI_SET_ABSBIT, ABS_MT_POSITION_Y);
-   ioctl(uinp_fd, UI_SET_ABSBIT, ABS_MT_TRACKING_ID);
-
    ret = write(uinp_fd, uinp, sizeof(struct uinput_user_dev));
    if (ret < 0)
      {
-        DMWRN("Failed to write UINPUT device\n");
+        DMWRN("mouse Failed to write UINPUT device\n");
         close(uinp_fd);
-        ret = TIZEN_INPUT_DEVICE_MANAGER_ERROR_NO_SYSTEM_RESOURCES;
-        goto finish;
+        return EINA_FALSE;
      }
    else
      {
@@ -873,14 +966,70 @@ _e_input_devmgr_cb_init_generator(struct wl_client *client, struct wl_resource *
      }
    if (ioctl(uinp_fd, UI_DEV_CREATE))
      {
-        DMWRN("Unable to create UINPUT device\n");
+        DMWRN("mouse Unable to create UINPUT device\n");
         close(uinp_fd);
+        return EINA_FALSE;
+     }
+
+   input_devmgr_data->inputgen.touch.uinp_fd = uinp_fd;
+
+   return EINA_TRUE;
+}
+
+
+static void
+_e_input_devmgr_cb_init_generator(struct wl_client *client, struct wl_resource *resource)
+{
+   struct uinput_user_dev *uinp = &input_devmgr_data->inputgen.uinp;
+   int ret = -1;
+
+#ifdef ENABLE_CYNARA
+   if (EINA_FALSE == _e_devicemgr_util_do_privilege_check(client, wl_client_get_fd(client), "http://tizen.org/privilege/inputgenerator"))
+     {
+        DMERR("_e_input_devmgr_cb_init_generator:priv check failed");
+        ret = TIZEN_INPUT_DEVICE_MANAGER_ERROR_NO_PERMISSION;
+        goto finish;
+     }
+#endif
+
+   if (input_devmgr_data->inputgen.ref > 0)
+     {
+        input_devmgr_data->inputgen.ref++;
+        _e_input_devmgr_inputgen_client_add(client);
+        ret = TIZEN_INPUT_DEVICE_MANAGER_ERROR_NONE;
+        goto finish;
+     }
+
+   strncpy(uinp->name, "Input Generator", UINPUT_MAX_NAME_SIZE);
+   uinp->id.version = 4;
+   uinp->id.bustype = BUS_VIRTUAL;
+
+   if (!_e_input_devmgr_create_keyboard_device())
+     {
+        DMWRN("Failed to create keyboard device\n");
         ret = TIZEN_INPUT_DEVICE_MANAGER_ERROR_NO_SYSTEM_RESOURCES;
         goto finish;
      }
-   input_devmgr_data->inputgen.uinp_fd = uinp_fd;
+   if (!_e_input_devmgr_create_mouse_device())
+     {
+        DMWRN("Failed to create mouse device\n");
+        _e_input_devmgr_inputgen_generator_remove_keyboard();
+        ret = TIZEN_INPUT_DEVICE_MANAGER_ERROR_NO_SYSTEM_RESOURCES;
+        goto finish;
+     }
+   if (!_e_input_devmgr_create_touch_device())
+     {
+        DMWRN("Failed to create touch device\n");
+        _e_input_devmgr_inputgen_generator_remove_keyboard();
+        _e_input_devmgr_inputgen_generator_remove_mouse();
+        ret = TIZEN_INPUT_DEVICE_MANAGER_ERROR_NO_SYSTEM_RESOURCES;
+        goto finish;
+     }
+
    input_devmgr_data->inputgen.ref++;
    _e_input_devmgr_inputgen_client_add(client);
+
+   ret = TIZEN_INPUT_DEVICE_MANAGER_ERROR_NONE;
 
 finish:
    tizen_input_device_manager_send_error(resource, ret);
@@ -901,7 +1050,9 @@ _e_input_devmgr_cb_deinit_generator(struct wl_client *client, struct wl_resource
    input_devmgr_data->inputgen.ref--;
    if (input_devmgr_data->inputgen.ref == 0)
      {
-        _e_input_devmgr_inputgen_generator_remove();
+        _e_input_devmgr_inputgen_generator_remove_keyboard();
+        _e_input_devmgr_inputgen_generator_remove_mouse();
+        _e_input_devmgr_inputgen_generator_remove_touch();
      }
 
    ret = TIZEN_INPUT_DEVICE_MANAGER_ERROR_NONE;
@@ -950,9 +1101,9 @@ _e_input_devmgr_generate_key_event(const char *key, Eina_Bool pressed)
    e->data = NULL;
 
    e->modifiers = 0;
-   e->dev = ecore_drm_evdev_get_ecore_device(input_devmgr_data->inputgen.uinp_identifier, ECORE_DEVICE_CLASS_KEYBOARD);
+   e->dev = ecore_drm_evdev_get_ecore_device(input_devmgr_data->inputgen.kbd.uinp_identifier, ECORE_DEVICE_CLASS_KEYBOARD);
 
-   DMDBG("Generate key event: key: %s, keycode: %d, iden: %s\n", e->key, e->keycode, input_devmgr_data->inputgen.uinp_identifier);
+   DMDBG("Generate key event: key: %s, keycode: %d, iden: %s\n", e->key, e->keycode, input_devmgr_data->inputgen.kbd.uinp_identifier);
 
    if (pressed)
      ecore_event_add(ECORE_EVENT_KEY_DOWN, e, _e_input_devmgr_keyevent_free, NULL);
@@ -977,7 +1128,7 @@ _e_input_devmgr_cb_generate_key(struct wl_client *client, struct wl_resource *re
      }
 #endif
 
-   if (input_devmgr_data->inputgen.uinp_fd < 0)
+   if (input_devmgr_data->inputgen.kbd.uinp_fd < 0)
      {
         DMWRN("generate is not init\n");
         ret = TIZEN_INPUT_DEVICE_MANAGER_ERROR_INVALID_PARAMETER;
@@ -997,10 +1148,111 @@ finish:
 }
 
 static void
+_e_input_devmgr_mouse_button_event_free(void *data EINA_UNUSED, void *ev)
+{
+   Ecore_Event_Mouse_Button *e = ev;
+
+   free(e);
+}
+
+static int
+_e_input_devmgr_generate_pointer_event(Eina_Bool state, int x, int y, int buttons)
+{
+   Ecore_Event_Mouse_Button *e;
+
+   e = calloc(1, sizeof(Ecore_Event_Mouse_Button));
+   if (!e) return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NO_SYSTEM_RESOURCES;
+
+   e->window = e_comp->win;
+   e->event_window = e->window;
+   e->root_window = e_comp->root;
+   e->timestamp = (int)(ecore_time_get() * 1000);
+   e->same_screen = 1;
+
+   e->x = x;
+   e->y = y;
+   e->root.x = e->x;
+   e->root.y = e->y;
+
+   e->multi.device = 0;
+   e->multi.radius = 1;
+   e->multi.radius_x = 1;
+   e->multi.radius_y = 1;
+   e->multi.pressure = 1.0;
+   e->multi.angle = 0.0;
+
+   e->multi.x = e->x;
+   e->multi.y = e->y;
+   e->multi.root.x = e->x;
+   e->multi.root.y = e->y;
+   e->dev = ecore_drm_evdev_get_ecore_device(input_devmgr_data->inputgen.ptr.uinp_identifier, ECORE_DEVICE_CLASS_MOUSE);
+   e->buttons = buttons;
+
+   DMDBG("Generate mouse button event: button: %d (state: %d)\n", buttons, state);
+
+   if (state)
+     ecore_event_add(ECORE_EVENT_MOUSE_BUTTON_DOWN, e, _e_input_devmgr_mouse_button_event_free, NULL);
+   else
+     ecore_event_add(ECORE_EVENT_MOUSE_BUTTON_UP, e, _e_input_devmgr_mouse_button_event_free, NULL);
+
+   return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NONE;
+}
+
+static void
+_e_input_devmgr_mouse_move_event_free(void *data EINA_UNUSED, void *ev)
+{
+   Ecore_Event_Mouse_Move *e = ev;
+
+   free(e);
+}
+
+static int
+_e_input_devmgr_generate_pointer_move_event(int x, int y)
+{
+   Ecore_Event_Mouse_Move *e;
+
+   DMERR("Try\n");
+
+   e = calloc(1, sizeof(Ecore_Event_Mouse_Button));
+   if (!e) return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NO_SYSTEM_RESOURCES;
+
+   e->window = e_comp->win;
+   e->event_window = e->window;
+   e->root_window = e_comp->root;
+   e->timestamp = (int)(ecore_time_get() * 1000);
+   e->same_screen = 1;
+
+   e->x = x;
+   e->y = y;
+   e->root.x = e->x;
+   e->root.y = e->y;
+
+   e->multi.device = 0;
+   e->multi.radius = 1;
+   e->multi.radius_x = 1;
+   e->multi.radius_y = 1;
+   e->multi.pressure = 1.0;
+   e->multi.angle = 0.0;
+
+   e->multi.x = e->x;
+   e->multi.y = e->y;
+   e->multi.root.x = e->x;
+   e->multi.root.y = e->y;
+   e->dev = ecore_drm_evdev_get_ecore_device(input_devmgr_data->inputgen.ptr.uinp_identifier, ECORE_DEVICE_CLASS_MOUSE);
+
+   DMDBG("Generate mouse move event: (%d, %d)\n", e->x, e->y);
+
+   ecore_event_add(ECORE_EVENT_MOUSE_MOVE, e, _e_input_devmgr_mouse_move_event_free, NULL);
+
+   return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NONE;
+}
+
+static void
 _e_input_devmgr_cb_generate_pointer(struct wl_client *client, struct wl_resource *resource,
                                     uint32_t type, uint32_t x, uint32_t y, uint32_t button)
 {
    int ret = TIZEN_INPUT_DEVICE_MANAGER_ERROR_NONE;
+   Eina_Bool state;
 #ifdef ENABLE_CYNARA
    if (EINA_FALSE == _e_devicemgr_util_do_privilege_check(client, wl_client_get_fd(client), "http://tizen.org/privilege/inputgenerator"))
      {
@@ -1009,18 +1261,25 @@ _e_input_devmgr_cb_generate_pointer(struct wl_client *client, struct wl_resource
         goto finish;
      }
 #endif
+   if (input_devmgr_data->inputgen.ptr.uinp_fd < 0)
+     {
+        DMWRN("generate is not init\n");
+        ret = TIZEN_INPUT_DEVICE_MANAGER_ERROR_INVALID_PARAMETER;
+        goto finish;
+     }
+
+   if (type == TIZEN_INPUT_DEVICE_MANAGER_POINTER_EVENT_TYPE_UPDATE)
+      ret = _e_input_devmgr_generate_pointer_move_event(x, y);
+   else
+     {
+        state = (type == TIZEN_INPUT_DEVICE_MANAGER_POINTER_EVENT_TYPE_BEGIN) ?
+                EINA_TRUE : EINA_FALSE;
+        ret = _e_input_devmgr_generate_pointer_event(state, x, y, button);
+     }
 
    DMDBG("generate pointer is requested from %p client. type: %d, coord(%d, %d), button: %d\n", client, type, x, y, button);
 finish:
    tizen_input_device_manager_send_error(resource, ret);
-}
-
-static void
-_e_input_devmgr_touchevent_free(void *data EINA_UNUSED, void *ev)
-{
-   Ecore_Event_Mouse_Button *e = ev;
-
-   free(e);
 }
 
 static int
@@ -1053,25 +1312,17 @@ _e_input_devmgr_generate_touch_event(uint32_t type, uint32_t x, uint32_t y, uint
    e->multi.y = e->y;
    e->multi.root.x = e->x;
    e->multi.root.y = e->y;
-   e->dev = ecore_drm_evdev_get_ecore_device(input_devmgr_data->inputgen.uinp_identifier, ECORE_DEVICE_CLASS_TOUCH);
+   e->dev = ecore_drm_evdev_get_ecore_device(input_devmgr_data->inputgen.touch.uinp_identifier, ECORE_DEVICE_CLASS_TOUCH);
    e->buttons = 1;
 
    DMDBG("Generate touch event: device: %d (%d, %d)\n", e->multi.device, e->x, e->y);
 
    if (type == TIZEN_INPUT_DEVICE_MANAGER_POINTER_EVENT_TYPE_BEGIN)
-     ecore_event_add(ECORE_EVENT_MOUSE_BUTTON_DOWN, e, _e_input_devmgr_touchevent_free, NULL);
+     ecore_event_add(ECORE_EVENT_MOUSE_BUTTON_DOWN, e, _e_input_devmgr_mouse_button_event_free, NULL);
    else
-     ecore_event_add(ECORE_EVENT_MOUSE_BUTTON_UP, e, _e_input_devmgr_touchevent_free, NULL);
+     ecore_event_add(ECORE_EVENT_MOUSE_BUTTON_UP, e, _e_input_devmgr_mouse_button_event_free, NULL);
 
    return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NONE;
-}
-
-static void
-_e_input_devmgr_touchmoveevent_free(void *data EINA_UNUSED, void *ev)
-{
-   Ecore_Event_Mouse_Move *e = ev;
-
-   free(e);
 }
 
 static int
@@ -1104,11 +1355,11 @@ _e_input_devmgr_generate_touch_update_event(uint32_t x, uint32_t y, uint32_t fin
    e->multi.y = e->y;
    e->multi.root.x = e->x;
    e->multi.root.y = e->y;
-   e->dev = ecore_drm_evdev_get_ecore_device(input_devmgr_data->inputgen.uinp_identifier, ECORE_DEVICE_CLASS_TOUCH);
+   e->dev = ecore_drm_evdev_get_ecore_device(input_devmgr_data->inputgen.touch.uinp_identifier, ECORE_DEVICE_CLASS_TOUCH);
 
    DMDBG("Generate touch move event: device: %d (%d, %d)\n", e->multi.device, e->x, e->y);
 
-   ecore_event_add(ECORE_EVENT_MOUSE_MOVE, e, _e_input_devmgr_touchmoveevent_free, NULL);
+   ecore_event_add(ECORE_EVENT_MOUSE_MOVE, e, _e_input_devmgr_mouse_move_event_free, NULL);
 
    return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NONE;
 }
@@ -1128,7 +1379,7 @@ _e_input_devmgr_cb_generate_touch(struct wl_client *client, struct wl_resource *
      }
 #endif
 
-   if (input_devmgr_data->inputgen.uinp_fd < 0)
+   if (input_devmgr_data->inputgen.touch.uinp_fd < 0)
      {
         DMWRN("generate is not init\n");
         ret = TIZEN_INPUT_DEVICE_MANAGER_ERROR_INVALID_PARAMETER;
@@ -1308,7 +1559,10 @@ e_devicemgr_device_init(void)
    input_devmgr_data->cynara_initialized = EINA_TRUE;
 #endif
 
-   input_devmgr_data->inputgen.uinp_fd = -1;
+   input_devmgr_data->inputgen.kbd.uinp_fd = -1;
+   input_devmgr_data->inputgen.ptr.uinp_fd = -1;
+   input_devmgr_data->inputgen.touch.uinp_fd = -1;
+   input_devmgr_data->inputgen.ref = 0;
 
    TRACE_INPUT_END();
    return 1;
@@ -1386,5 +1640,7 @@ e_devicemgr_device_fini(void)
    E_FREE_LIST(input_devmgr_data->pressed_keys, free);
 
    eina_stringshare_del(input_devmgr_data->detent.identifier);
-   eina_stringshare_del(input_devmgr_data->inputgen.uinp_identifier);
+   eina_stringshare_del(input_devmgr_data->inputgen.kbd.uinp_identifier);
+   eina_stringshare_del(input_devmgr_data->inputgen.ptr.uinp_identifier);
+   eina_stringshare_del(input_devmgr_data->inputgen.touch.uinp_identifier);
 }

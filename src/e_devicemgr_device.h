@@ -65,8 +65,21 @@ struct _e_devicemgr_input_devmgr_data
    struct
    {
       struct uinput_user_dev uinp;
-      int uinp_fd;
-      char *uinp_identifier;
+      struct
+      {
+         int uinp_fd;
+         char *uinp_identifier;
+      } kbd;
+      struct
+      {
+         int uinp_fd;
+         char *uinp_identifier;
+      } ptr;
+      struct
+      {
+         int uinp_fd;
+         char *uinp_identifier;
+      } touch;
       unsigned int ref;
       Eina_List *clients;
    }inputgen;
