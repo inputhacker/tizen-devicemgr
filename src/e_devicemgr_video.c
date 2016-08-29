@@ -1270,7 +1270,11 @@ _e_video_render(E_Video *video, const char *func)
 
    comp_buffer = e_pixmap_resource_get(video->ec->pixmap);
    if (!comp_buffer)
-     return;
+     {
+        if (video->layer)
+          _e_video_frame_buffer_show(video, NULL);
+        return;
+     }
 
    _e_video_format_info_get(video);
 
