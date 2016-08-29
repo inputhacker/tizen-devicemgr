@@ -760,6 +760,9 @@ _destination_mode_calculate_destination(E_Viewport *viewport, Eina_Rectangle *re
    if (!viewport->epc)
      {
         E_Zone *zone = e_comp_zone_xy_get(ec->x, ec->y);
+
+        EINA_SAFETY_ON_FALSE_RETURN_VAL(zone != NULL, EINA_FALSE);
+
         pw = zone->w;
         ph = zone->h;
      }
@@ -1023,8 +1026,7 @@ _e_devicemgr_viewport_apply_destination(E_Viewport *viewport, Eina_Rectangle *rr
      {
         E_Zone *zone = e_comp_zone_xy_get(ec->x, ec->y);
 
-        if (zone == NULL)
-          return EINA_FALSE;
+        EINA_SAFETY_ON_FALSE_RETURN_VAL(zone != NULL, EINA_FALSE);
 
         prect.x = prect.y = 0;
         prect.w = zone->w;
