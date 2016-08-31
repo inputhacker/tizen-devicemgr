@@ -9,7 +9,7 @@ static Eina_List *handlers = NULL;
 static Eina_Bool remapped = EINA_FALSE;
 static Ecore_Event_Filter *ev_filter = NULL;
 
-E_Devicemgr_Config_Data *dconfig;
+extern E_Devicemgr_Config_Data *dconfig;
 
 static Eina_Bool
 _cb_input_dev_add(void *data EINA_UNUSED, int type EINA_UNUSED, void *event)
