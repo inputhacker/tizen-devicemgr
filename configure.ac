@@ -68,6 +68,26 @@ PKG_PROG_PKG_CONFIG
 dnl ========================================================================
 # checks for pkg-config
 dnl ========================================================================
+AC_PATH_PROG([wayland_scanner], [wayland-scanner])
+if test x$wayland_scanner = x; then
+	AC_MSG_ERROR([wayland-scanner is needed to compile])
+fi
+
+eom=no
+AC_ARG_ENABLE([eom],
+	AS_HELP_STRING([--enable-eom], [enable eom  @<:@default=enabled@:>@]),
+		[eom=$enableval],
+		[eom=no])
+AC_MSG_CHECKING([whether eom is enabled])
+AC_MSG_RESULT([${eom}])
+if test "x$eom" != "xno"; then
+	AC_DEFINE([HAVE_EOM], [1], [Enable eom])
+	have_eom=yes
+else
+	AC_DEFINE([HAVE_EOM], [0], [Disable eom])
+	have_eom=no
+fi
+AM_CONDITIONAL([HAVE_EOM], [test "x${have_eom}" = "xyes"])
 
 have_wayland_only=no
 AC_ARG_ENABLE([wayland-only],
@@ -81,7 +101,12 @@ fi
 AM_CONDITIONAL(HAVE_WAYLAND_ONLY, [test "x${have_wayland_only}" = xyes])
 
 if test "x${have_wayland_only}" = "xyes"; then
-	PKG_CHECK_MODULES(ENLIGHTENMENT, [enlightenment, dlog, wayland-server, screenshooter-server, tizen-extension-server, wayland-tbm-server, libtbm, libtdm, libpng, pixman-1])
+	if test "x${have_eom}" = "xyes"; then
+		PKG_CHECK_MODULES(ENLIGHTENMENT, [enlightenment, dlog, wayland-server, screenshooter-server, tizen-extension-server, wayland-tbm-server, libtbm, libtdm, libpng, pixman-1, eom])
+	else
+		PKG_CHECK_MODULES(ENLIGHTENMENT, [enlightenment, dlog, wayland-server, screenshooter-server, tizen-extension-server, wayland-tbm-server, libtbm, libtdm, libpng, pixman-1])
+	fi
+	PKG_CHECK_MODULES(WAYLAND_SCANNER, wayland-scanner)
 else
 	PKG_CHECK_MODULES(ENLIGHTENMENT, [enlightenment, dlog, x11, utilX])
 	ENLIGHTENMENT_CFLAGS="${ENLIGHTENMENT_CFLAGS} -DNEED_X=1"
