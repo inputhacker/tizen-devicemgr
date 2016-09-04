@@ -2276,3 +2276,62 @@ e_devicemgr_eom_fini(void)
 {
    _e_eom_deinit();
 }
+
+
+static E_EomOutputPtr
+_e_eom_output_by_ec_child_get(E_Client *ec)
+{
+   E_EomOutputPtr eom_output = NULL;
+   E_EomClientPtr eom_client = NULL;
+   E_Client *parent = NULL;
+   Eina_List *l;
+
+   EINA_LIST_FOREACH(g_eom->outputs, l, eom_output)
+     {
+        eom_client = _e_eom_client_get_current_by_id(eom_output->id);
+        if (!eom_client)
+          continue;
+
+        if (eom_client->ec == ec)
+          return eom_output;
+
+        if (!ec->comp_data || !ec->comp_data->sub.data)
+          continue;
+
+        parent = ec->comp_data->sub.data->parent;
+        while (parent)
+          {
+             if (parent == eom_client->ec)
+               return eom_output;
+
+             if (!parent->comp_data || !parent->comp_data->sub.data)
+               break;
+
+             parent = parent->comp_data->sub.data->parent;
+          }
+     }
+
+   return NULL;
+}
+
+Eina_Bool
+e_devicemgr_eom_is_ec_external(E_Client *ec)
+{
+   E_EomOutputPtr eom_output;
+
+   eom_output = _e_eom_output_by_ec_child_get(ec);
+   if (!eom_output)
+     return EINA_FALSE;
+   return EINA_TRUE;
+}
+
+tdm_output*
+e_devicemgr_tdm_output_by_ec_get(E_Client *ec)
+{
+   E_EomOutputPtr eom_output;
+
+   eom_output = _e_eom_output_by_ec_child_get(ec);
+   if (!eom_output)
+     return NULL;
+   return eom_output->output;
+}

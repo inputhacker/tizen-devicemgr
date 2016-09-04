@@ -3,6 +3,9 @@
 #include "e_devicemgr_video.h"
 #include "e_devicemgr_dpms.h"
 #include "e_devicemgr_viewport.h"
+#ifdef HAVE_EOM
+  #include "e_devicemgr_eom.h"
+#endif
 
 //#define DUMP_BUFFER
 
@@ -47,6 +50,9 @@ struct _E_Video
    Ecore_Drm_Output *drm_output;
    tdm_output *output;
    tdm_layer *layer;
+#ifdef HAVE_EOM
+   Eina_Bool external_video;
+#endif
 
    /* input info */
    tbm_format tbmfmt;
@@ -681,6 +687,10 @@ _e_video_geometry_cal(E_Video * video)
 {
    Eina_Rectangle screen = {0,};
    Eina_Rectangle output_r, input_r;
+#ifdef HAVE_EOM
+   const tdm_output_mode *mode = NULL;
+   tdm_error tdm_err = TDM_ERROR_NONE;
+#endif
 
    /* get geometry information with buffer scale, transform and viewport. */
    if (!_e_video_geometry_cal_viewport(video))
@@ -688,7 +698,24 @@ _e_video_geometry_cal(E_Video * video)
 
    _e_video_geometry_cal_map(video);
 
-   ecore_drm_output_current_resolution_get(video->drm_output, &screen.w, &screen.h, NULL);
+#ifdef HAVE_EOM
+   if (video->external_video)
+     {
+        tdm_err = tdm_output_get_mode(video->output, &mode);
+        if (tdm_err != TDM_ERROR_NONE)
+          return EINA_FALSE;
+
+        if (mode == NULL)
+          return EINA_FALSE;
+
+        screen.w = mode->hdisplay;
+        screen.h = mode->vdisplay;
+     }
+   else
+#endif
+     {
+        ecore_drm_output_current_resolution_get(video->drm_output, &screen.w, &screen.h, NULL);
+     }
 
    if (video->geo.output_r.x >= 0 && video->geo.output_r.y >= 0 &&
        (video->geo.output_r.x + video->geo.output_r.w) <= screen.w &&
@@ -922,15 +949,24 @@ _e_video_buffer_show(E_Video *video, E_Devmgr_Buf *mbuf, Eina_Rectangle *visible
    vfb->mbuf->showing = EINA_TRUE;
    VDB("mbuf(%d) waiting", MSTAMP(vfb->mbuf));
 
+   /* XXX: Sometimes there are more then 2 buffers if it is used
+    * for displaying video on external output */
+#ifndef HAVE_EOM
    /* There are waiting fbs more than 2 */
    if (eina_list_nth(video->waiting_list, 1))
      {
         VDT("There are waiting fbs more than 2");
         return;
      }
+#endif
 
-   if (e_devicemgr_dpms_get(video->drm_output))
-     goto no_commit;
+#ifdef HAVE_EOM
+   if (!video->external_video)
+#endif
+     {
+        if (e_devicemgr_dpms_get(video->drm_output))
+          goto no_commit;
+     }
 
    if (!_e_video_frame_buffer_show(video, vfb))
      goto no_commit;
@@ -1031,12 +1067,26 @@ _e_video_set(E_Video *video, E_Client *ec)
    video->ec = ec;
    video->window = e_client_util_win_get(ec);
 
-   video->drm_output = _e_video_drm_output_find(video->ec);
-   EINA_SAFETY_ON_NULL_RETURN(video->drm_output);
+#ifdef HAVE_EOM
+   video->external_video = e_devicemgr_eom_is_ec_external(ec);
+   if (video->external_video)
+     {
+        /* TODO: support screenmirror for external video */
+        video->drm_output = NULL;
 
-   /* TODO: find proper output */
-   video->output = e_devicemgr_tdm_output_get(video->drm_output);
-   EINA_SAFETY_ON_NULL_RETURN(video->output);
+        video->output = e_devicemgr_tdm_output_by_ec_get(ec);
+        EINA_SAFETY_ON_NULL_RETURN(video->output);
+     }
+   else
+#endif
+     {
+        video->drm_output = _e_video_drm_output_find(video->ec);
+        EINA_SAFETY_ON_NULL_RETURN(video->drm_output);
+
+        /* TODO: find proper output */
+        video->output = e_devicemgr_tdm_output_get(video->drm_output);
+        EINA_SAFETY_ON_NULL_RETURN(video->output);
+     }
 
    video->layer = e_devicemgr_tdm_avaiable_video_layer_get(video->output);
    if (!video->layer)
