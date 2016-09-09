@@ -1766,8 +1766,7 @@ _e_eom_cb_comp_object_redirected(void *data, E_Client *ec)
    RETURNVALIFTRUE(hook_data->ec != ec, EINA_TRUE, "hook_data->ec != ec");
 
    /* Hide the window from Enlightenment main screen */
-   if (ec->frame)
-     e_comp_object_redirected_set(ec->frame, EINA_FALSE);
+   e_client_redirected_set(ec, EINA_FALSE);
 
    e_comp_object_intercept_hook_del(hook_data->hook);
 
