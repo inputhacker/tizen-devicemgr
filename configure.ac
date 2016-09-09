@@ -84,7 +84,6 @@ if test "x$eom" != "xno"; then
 	AC_DEFINE([HAVE_EOM], [1], [Enable eom])
 	have_eom=yes
 else
-	AC_DEFINE([HAVE_EOM], [0], [Disable eom])
 	have_eom=no
 fi
 AM_CONDITIONAL([HAVE_EOM], [test "x${have_eom}" = "xyes"])
