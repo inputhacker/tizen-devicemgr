@@ -932,17 +932,19 @@ _e_eom_output_start_mirror(E_EomOutputPtr eom_output)
    eom_output->state = MIRROR;
 
    ret = _e_eom_pp_init(eom_output);
-   GOTOIFTRUE(ret == EINA_FALSE, err, "ERROR: init pp\n");
+   GOTOIFTRUE(ret == EINA_FALSE, err, "init pp");
 
    return EINA_TRUE;
 
 err:
-/* TODO: add deinitialization */
+
+   _e_eom_output_state_set_mode(eom_output, EOM_OUTPUT_MODE_NONE);
+   eom_output->state = NONE;
+
    return EINA_FALSE;
 }
 
 static void
-
 _e_eom_output_start_presentation(E_EomOutputPtr eom_output)
 {
    tdm_layer *hal_layer;
@@ -970,7 +972,10 @@ _e_eom_output_start_presentation(E_EomOutputPtr eom_output)
    return;
 
 err:
-/* TODO: add deinitialization */
+
+   _e_eom_output_state_set_mode(eom_output, EOM_OUTPUT_MODE_NONE);
+   eom_output->state = NONE;
+
    return;
 }
 
@@ -1620,7 +1625,7 @@ _e_eom_cb_wl_eom_client_destory(struct wl_resource *resource)
    /* If a client has been disconnected and mirror mode has not
     * been restored, start mirror mode
     */
-   ret = _e_eom_output_start_mirror(output);
+   _e_eom_output_start_mirror(output);
 
 end:
 
