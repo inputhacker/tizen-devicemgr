@@ -1323,10 +1323,14 @@ _e_eom_cb_tdm_output_status_change(tdm_output *output, tdm_output_change_type ty
 
         eom_output->name = eina_stringshare_add(new_name);
 
+        e_comp_override_add();
+
         _e_eom_output_connected(eom_output);
      }
    else if (status == TDM_OUTPUT_CONN_STATUS_DISCONNECTED)
      {
+        e_comp_override_del();
+
         _e_eom_output_disconnected(eom_output);
      }
 }
