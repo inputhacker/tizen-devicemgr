@@ -111,6 +111,7 @@ struct _E_Eom_Output
    tdm_output_conn_status status;
    eom_output_attribute_e attribute;
    eom_output_attribute_state_e attribute_state;
+   enum wl_eom_status connection;
 
    /* mirror mode data */
    tbm_surface_queue_h pp_queue;
@@ -1186,6 +1187,8 @@ _e_eom_output_connected(E_EomOutputPtr eom_output)
         _e_eom_output_start_mirror(eom_output);
      }
 
+   eom_output->connection = WL_EOM_STATUS_CONNECTION;
+
    /* If there were previously connected clients to the output - notify them */
    EINA_LIST_FOREACH(g_eom->clients, l, iterator)
      {
@@ -1198,7 +1201,7 @@ _e_eom_output_connected(E_EomOutputPtr eom_output)
                                        eom_output->type, eom_output->mode,
                                        eom_output->width, eom_output->height,
                                        eom_output->phys_width, eom_output->phys_height,
-                                       WL_EOM_STATUS_CONNECTION,
+                                       eom_output->connection,
                                        0,
                                        _e_eom_output_state_get_attribute(eom_output),
                                        EOM_OUTPUT_ATTRIBUTE_STATE_ACTIVE,
@@ -1208,7 +1211,7 @@ _e_eom_output_connected(E_EomOutputPtr eom_output)
                                        eom_output->type, eom_output->mode,
                                        eom_output->width, eom_output->height,
                                        eom_output->phys_width, eom_output->phys_height,
-                                       WL_EOM_STATUS_CONNECTION,
+                                       eom_output->connection,
                                        1, 0, 0, 0);
           }
      }
@@ -1233,6 +1236,7 @@ _e_eom_output_disconnected(E_EomOutputPtr eom_output)
    eom_output->height = 0;
    eom_output->phys_width = 0;
    eom_output->phys_height = 0;
+   eom_output->connection = WL_EOM_STATUS_DISCONNECTION;
 
    _e_eom_output_deinit(eom_output);
 
@@ -1247,7 +1251,7 @@ _e_eom_output_disconnected(E_EomOutputPtr eom_output)
                                        eom_output->type, eom_output->mode,
                                        eom_output->width, eom_output->height,
                                        eom_output->phys_width, eom_output->phys_height,
-                                       WL_EOM_STATUS_DISCONNECTION,
+                                       eom_output->connection,
                                        0,
                                        _e_eom_output_state_get_attribute(eom_output),
                                        EOM_OUTPUT_ATTRIBUTE_STATE_INACTIVE,
@@ -1257,7 +1261,7 @@ _e_eom_output_disconnected(E_EomOutputPtr eom_output)
                                        eom_output->type, eom_output->mode,
                                        eom_output->width, eom_output->height,
                                        eom_output->phys_width, eom_output->phys_height,
-                                       WL_EOM_STATUS_DISCONNECTION,
+                                       eom_output->connection,
                                        1, 0, 0, 0);
           }
      }
@@ -1378,6 +1382,7 @@ _e_eom_output_init(tdm_display *dpy)
         new_output->type = type;
         new_output->status = status;
         new_output->mode = EOM_OUTPUT_MODE_NONE;
+        new_output->connection = WL_EOM_STATUS_NONE;
         new_output->output = output;
 
         ret = tdm_output_add_change_handler(output, _e_eom_cb_tdm_output_status_change, NULL);
@@ -1948,7 +1953,8 @@ _e_eom_cb_wl_request_get_output_info(struct wl_client *client, struct wl_resourc
                           output->phys_width, output->phys_height, output->status);
 
                   wl_eom_send_output_info(resource, output->id, output->type, output->mode, output->width, output->height,
-                                          output->phys_width, output->phys_height, output->status, 1, 0, 0, 0);
+                                          output->phys_width, output->phys_height, output->connection,
+                                          1, 0, 0, 0);
                }
           }
      }
@@ -1997,7 +2003,7 @@ _e_eom_cb_wl_bind(struct wl_client *client, void *data, uint32_t version, uint32
                      output->id, output->type, output->mode, output->width, output->height,
                      output->phys_width, output->phys_height, output->status);
              wl_eom_send_output_info(resource, output->id, output->type, output->mode, output->width, output->height,
-                                     output->phys_width, output->phys_height, output->status,
+                                     output->phys_width, output->phys_height, output->connection,
                                      1, 0, 0, 0);
           }
      }
