@@ -627,19 +627,22 @@ error:
    return EINA_FALSE;
 }
 
-static tdm_error
+static void
 _e_eom_pp_run(E_EomOutputPtr eom_output)
 {
    tdm_error tdm_err = TDM_ERROR_NONE;
    tbm_surface_h dst_surface = NULL;
    tbm_surface_h src_surface = NULL;
 
-   EINA_SAFETY_ON_FALSE_RETURN_VAL(g_eom->main_output_state != 0, tdm_err);
+   if (g_eom->main_output_state == 0)
+     return;
 
    /* If a client has committed its buffer stop mirror mode */
-   EINA_SAFETY_ON_FALSE_RETURN_VAL(eom_output->state == MIRROR, tdm_err);
-   EINA_SAFETY_ON_NULL_RETURN_VAL(eom_output->pp, tdm_err);
-   EINA_SAFETY_ON_NULL_RETURN_VAL(eom_output->pp_queue, tdm_err);
+   if (eom_output->state != MIRROR)
+     return;
+
+   if (!eom_output->pp || !eom_output->pp_queue)
+     return;
 
    if (tbm_surface_queue_can_dequeue(eom_output->pp_queue, 0) )
      {
@@ -673,9 +676,11 @@ _e_eom_pp_run(E_EomOutputPtr eom_output)
         tbm_surface_queue_add_dequeuable_cb(eom_output->pp_queue, _e_eom_cb_dequeuable, eom_output);
      }
 
-   return TDM_ERROR_NONE;
+   return;
 
 error:
+
+   EOMER("failed run pp tdm error: %d", tdm_err);
 
    if (eom_output->pp_src_surface)
      {
@@ -694,8 +699,6 @@ error:
         tdm_buffer_remove_release_handler(dst_surface, _e_eom_cb_pp, eom_output);
         tbm_surface_queue_release(eom_output->pp_queue, dst_surface);
      }
-
-  return tdm_err;
 }
 
 static void
@@ -1763,9 +1766,11 @@ _e_eom_cb_comp_object_redirected(void *data, E_Client *ec)
 
    hook_data = (E_EomCompObjectInterceptHookData* )data;
 
-   EINA_SAFETY_ON_NULL_RETURN_VAL(hook_data->ec, EINA_TRUE);
-   EINA_SAFETY_ON_NULL_RETURN_VAL(hook_data->hook, EINA_TRUE);
-   EINA_SAFETY_ON_FALSE_RETURN_VAL(hook_data->ec == ec, EINA_TRUE);
+   if (!hook_data->ec || !hook_data->hook)
+     return EINA_TRUE;
+
+   if (hook_data->ec != ec)
+     return EINA_TRUE;
 
    /* Hide the window from Enlightenment main screen */
    e_client_redirected_set(ec, EINA_FALSE);
