@@ -1074,7 +1074,7 @@ _e_video_set(E_Video *video, E_Client *ec)
         /* TODO: support screenmirror for external video */
         video->drm_output = NULL;
 
-        video->output = e_devicemgr_tdm_output_by_ec_get(ec);
+        video->output = e_devicemgr_eom_tdm_output_by_ec_get(ec);
         EINA_SAFETY_ON_NULL_RETURN(video->output);
      }
    else
