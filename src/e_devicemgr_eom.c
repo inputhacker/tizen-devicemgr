@@ -1,6 +1,7 @@
 #include "e.h"
 #include "e_mod_main.h"
 #include "e_devicemgr_privates.h"
+#include "e_devicemgr_buffer.h"
 #include "e_devicemgr_tdm.h"
 #include "e_devicemgr_eom.h"
 #include "eom-server-protocol.h"
@@ -13,6 +14,11 @@
 #ifdef FRAMES
 #include <time.h>
 #endif
+
+/*
+#define EOM_DUMP_MIRROR_BUFFERS
+#define EOM_DUMP_PRESENTATION_BUFFERS
+*/
 
 #define ALEN(array) (sizeof(array) / sizeof(array)[0])
 
@@ -730,6 +736,14 @@ _e_eom_cb_pp(tbm_surface_h surface, void *user_data)
         tbm_surface_queue_release(eom_output->pp_queue, surface);
         return;
      }
+
+#ifdef EOM_DUMP_MIRROR_BUFFERS
+   E_Devmgr_Buf *mbuf = e_devmgr_buffer_create_tbm(surface);
+   EINA_SAFETY_ON_NULL_RETURN(mbuf);
+   static int i;
+   e_devmgr_buffer_dump(mbuf, "eom_mirror", i++, 0);
+   e_devmgr_buffer_unref(mbuf);
+#endif
 
    if(!_e_eom_output_show(eom_output, surface, _e_eom_tbm_buffer_release_mirror_mod, NULL))
      {
@@ -2176,6 +2190,14 @@ _e_eom_cb_client_buffer_change(void *data, int type, void *event)
    EINA_SAFETY_ON_NULL_RETURN_VAL(eom_buff, ECORE_CALLBACK_PASS_ON);
 
    EOMDB("===============>  EXT START   tbm_buff:%p", tbm_buffer);
+
+#ifdef EOM_DUMP_PRESENTATION_BUFFERS
+   E_Devmgr_Buf *mbuf = e_devmgr_buffer_create_tbm(tbm_buffer);
+   EINA_SAFETY_ON_NULL_RETURN_VAL(mbuf, ECORE_CALLBACK_PASS_ON);
+   static int i;
+   e_devmgr_buffer_dump(mbuf, "eom_external", i++, 0);
+   e_devmgr_buffer_unref(mbuf);
+#endif
 
    if(!_e_eom_output_show(eom_output, tbm_buffer, _e_eom_tbm_buffer_release_ext_mod, eom_buff))
      {
