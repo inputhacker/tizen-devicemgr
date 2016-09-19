@@ -1145,7 +1145,7 @@ _e_eom_output_connected(E_EomOutputPtr eom_output)
    /* If there were previously connected clients to the output - notify them */
    EINA_LIST_FOREACH(g_eom->clients, l, iterator)
      {
-        if (iterator)
+        if (iterator && iterator->resource)
           {
              EOMDB("Send MIRROR ON notification to clients");
 
@@ -1196,7 +1196,7 @@ _e_eom_output_disconnected(E_EomOutputPtr eom_output)
    /* If there were previously connected clients to the output - notify them */
    EINA_LIST_FOREACH(g_eom->clients, l, iterator)
      {
-        if (iterator)
+        if (iterator && iterator->resource)
           {
              EOMDB("Send MIRROR OFF notification to client: %p", iterator);
              if (iterator->current)
