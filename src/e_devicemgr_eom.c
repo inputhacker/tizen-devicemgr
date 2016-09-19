@@ -2118,11 +2118,12 @@ static Eina_Bool
 _e_eom_cb_client_buffer_change(void *data, int type, void *event)
 {
    E_Comp_Wl_Buffer *wl_buffer = NULL;
-   E_EomClientPtr eom_client = NULL;
+   E_EomClientPtr eom_client = NULL, eom_client_itr = NULL;
    E_EomOutputPtr eom_output = NULL;
    E_Event_Client *ev = event;
    E_Client *ec = NULL;
    tbm_surface_h tbm_buffer = NULL;
+   Eina_List *l;
 
    EINA_SAFETY_ON_NULL_RETURN_VAL(ev, ECORE_CALLBACK_PASS_ON);
    EINA_SAFETY_ON_NULL_RETURN_VAL(ev->ec, ECORE_CALLBACK_PASS_ON);
@@ -2191,7 +2192,19 @@ _e_eom_cb_client_buffer_change(void *data, int type, void *event)
           ecore_timer_del(eom_output->delay);
      }
 
-   eom_output->state = PRESENTATION;
+   if (eom_output->state != PRESENTATION)
+     {
+        _e_eom_output_state_set_mode(eom_output, EOM_OUTPUT_MODE_PRESENTATION);
+
+        EINA_LIST_FOREACH(g_eom->clients, l, eom_client_itr)
+          {
+             if (eom_client_itr->output_id == eom_output->id)
+               wl_eom_send_output_mode(eom_client_itr->resource, eom_output->id,
+                                       _e_eom_output_state_get_mode(eom_output));
+          }
+
+        eom_output->state = PRESENTATION;
+     }
 
    EOMDB("===============<  EXT START");
    return ECORE_CALLBACK_PASS_ON;
