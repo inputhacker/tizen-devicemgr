@@ -18,16 +18,8 @@
 
 #define EOMER(msg, ARG...) ERR("[eom module][%s:%d] ERR: " msg "\n", __FUNCTION__, __LINE__, ##ARG)
 #define EOMWR(msg, ARG...) WRN("[eom module][%s:%d] WRN: " msg "\n", __FUNCTION__, __LINE__, ##ARG)
-#define EOMIN(msg, ARG...) \
-   { \
-      if (eom_server_debug) \
-        INF("[eom module][%s:%d] INF: " msg "\n", __FUNCTION__, __LINE__, ##ARG); \
-   }
-#define EOMDB(msg, ARG...) \
-   { \
-      if (eom_server_debug) \
-        DBG("[eom module][%s:%d] DBG: " msg "\n", __FUNCTION__, __LINE__, ##ARG); \
-   }
+#define EOMIN(msg, ARG...) INF("[eom module][%s:%d] INF: " msg "\n", __FUNCTION__, __LINE__, ##ARG)
+#define EOMDB(msg, ARG...) DBG("[eom module][%s:%d] DBG: " msg "\n", __FUNCTION__, __LINE__, ##ARG)
 
 #define EOM_NUM_ATTR 3
 #define EOM_CONNECT_CHECK_TIMEOUT 7.0
@@ -179,7 +171,6 @@ static const char *eom_conn_types[] =
 };
 
 static E_EomPtr g_eom = NULL;
-Eina_Bool eom_server_debug = EINA_FALSE;
 
 static void _e_eom_cb_dequeuable(tbm_surface_queue_h queue, void *user_data);
 static void _e_eom_cb_pp(tbm_surface_h surface, void *user_data);
@@ -1473,19 +1464,6 @@ _e_eom_deinit()
    E_FREE(g_eom);
 }
 
-static void
-_e_eom_util_get_debug_env()
-{
-   char *env = getenv("EOM_SERVER_DEBUG");
-
-   if (env)
-     eom_server_debug = (atoi(env)) > 0 ? EINA_TRUE : EINA_FALSE;
-   else
-     eom_server_debug = EINA_FALSE;
-
-   EOMIN("EOM_SERVER_DEBUG = %s", eom_server_debug > 0 ? "ON" : "OFF");
-}
-
 static E_EomClientPtr
 _e_eom_client_get_by_resource(struct wl_resource *resource)
 {
@@ -2225,8 +2203,6 @@ _e_eom_init()
    Eina_Bool ret = EINA_FALSE;
    uint32_t id = 0;
 
-   _e_eom_util_get_debug_env();
-
    EINA_SAFETY_ON_NULL_GOTO(e_comp_wl, err);
 
    g_eom = E_NEW(E_Eom, 1);
@@ -2235,7 +2211,7 @@ _e_eom_init()
    g_eom->global = wl_global_create(e_comp_wl->wl.disp, &wl_eom_interface, 1, g_eom, _e_eom_cb_wl_bind);
 
    id = wl_display_get_serial(e_comp_wl->wl.disp);
-   EOMDB("121212121212121212121212 eom name: %d", id);
+   EOMDB("eom name: %d", id);
 
    EINA_SAFETY_ON_NULL_GOTO(g_eom->global, err);
 
