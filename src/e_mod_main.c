@@ -132,10 +132,7 @@ e_modapi_init(E_Module *m)
      }
 #ifdef HAVE_EOM
    if (!e_devicemgr_eom_init())
-     {
-        SLOG(LOG_DEBUG, "DEVICEMGR", "[e_devicemgr][%s] Failed @ e_devicemgr_eom_init()..!\n", __FUNCTION__);
-        return NULL;
-     }
+     SLOG(LOG_DEBUG, "DEVICEMGR", "[e_devicemgr][%s] Failed @ e_devicemgr_eom_init()..!\n", __FUNCTION__);
 #endif
 #endif
 

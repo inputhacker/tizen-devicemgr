@@ -2261,6 +2261,8 @@ e_devicemgr_eom_init(void)
 void
 e_devicemgr_eom_fini(void)
 {
+  if (!g_eom) return;
+
    _e_eom_deinit();
 }
 
@@ -2268,6 +2270,8 @@ Eina_Bool
 e_devicemgr_eom_is_ec_external(E_Client *ec)
 {
    E_EomOutputPtr eom_output;
+
+  if (!g_eom) return EINA_FALSE;
 
    eom_output = _e_eom_output_by_ec_child_get(ec);
    if (!eom_output)
@@ -2279,6 +2283,8 @@ tdm_output*
 e_devicemgr_eom_tdm_output_by_ec_get(E_Client *ec)
 {
    E_EomOutputPtr eom_output;
+
+  if (!g_eom) return NULL;
 
    eom_output = _e_eom_output_by_ec_child_get(ec);
    if (!eom_output)
