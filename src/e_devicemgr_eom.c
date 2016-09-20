@@ -180,6 +180,7 @@ static E_EomPtr g_eom = NULL;
 
 static void _e_eom_cb_dequeuable(tbm_surface_queue_h queue, void *user_data);
 static void _e_eom_cb_pp(tbm_surface_h surface, void *user_data);
+static E_EomOutputPtr _e_eom_output_get_by_id(int id);
 
 static E_EomOutputBufferPtr
 _e_eom_output_buff_create( E_EomOutputPtr eom_output, tbm_surface_h tbm_surface, E_EomEndShowingEventPtr cb_func, void *cb_user_data)
@@ -934,6 +935,8 @@ _e_eom_output_start_presentation(E_EomOutputPtr eom_output)
 
    eom_output->layer = hal_layer;
 
+   _e_eom_output_state_set_mode(eom_output, EOM_OUTPUT_MODE_PRESENTATION);
+
    tdm_err = tdm_output_set_dpms(eom_output->output, TDM_OUTPUT_DPMS_ON);
    EINA_SAFETY_ON_FALSE_GOTO(tdm_err == TDM_ERROR_NONE, err);
 
@@ -977,7 +980,11 @@ _e_eom_output_deinit(E_EomOutputPtr eom_output)
 
    _e_eom_output_state_set_status(eom_output, TDM_OUTPUT_CONN_STATUS_DISCONNECTED);
    _e_eom_output_state_set_mode(eom_output, EOM_OUTPUT_MODE_NONE);
-   eom_output->state = NONE;
+
+   if (_e_eom_client_get_current_by_id(eom_output->id))
+     eom_output->state = WAIT_PRESENTATION;
+   else
+     eom_output->state = NONE;
 
    if (eom_output->layer)
      {
