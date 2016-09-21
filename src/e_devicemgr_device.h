@@ -45,6 +45,7 @@ struct _e_devicemgr_input_device_user_data
 {
    E_Comp_Wl_Input_Device *dev;
    struct wl_resource *dev_mgr_res;
+   struct wl_resource *seat_res;
 };
 
 struct _e_devicemgr_input_devmgr_data

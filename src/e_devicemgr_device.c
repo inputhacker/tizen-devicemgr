@@ -143,6 +143,8 @@ _e_devicemgr_del_device(const char *name, const char *identifier, const char *se
                   if (!device_user_data) continue;
                   if (device_user_data->dev_mgr_res != dev_mgr_res)
                     continue;
+                  if (device_user_data->seat_res != seat_res)
+                    continue;
 
                   tizen_input_device_manager_send_device_remove(dev_mgr_res, serial, dev->identifier, res, seat_res);
                }
@@ -156,6 +158,7 @@ _e_devicemgr_del_device(const char *name, const char *identifier, const char *se
           {
              device_user_data->dev = NULL;
              device_user_data->dev_mgr_res = NULL;
+             device_user_data->seat_res = NULL;
              E_FREE(device_user_data);
           }
 
@@ -183,6 +186,7 @@ _e_devicemgr_device_cb_device_unbind(struct wl_resource *resource)
 
    device_user_data->dev = NULL;
    device_user_data->dev_mgr_res = NULL;
+   device_user_data->seat_res = NULL;
    E_FREE(device_user_data);
 
    if (!dev) return;
@@ -255,6 +259,7 @@ _e_devicemgr_add_device(const char *name, const char *identifier, const char *se
                }
              device_user_data->dev = dev;
              device_user_data->dev_mgr_res = dev_mgr_res;
+             device_user_data->seat_res = seat_res;
 
              dev->resources = eina_list_append(dev->resources, res);
              wl_resource_set_implementation(res, &_e_devicemgr_device_interface, device_user_data,
@@ -1226,41 +1231,38 @@ _e_devicemgr_device_mgr_cb_bind(struct wl_client *client, void *data, uint32_t v
                                  _e_devicemgr_device_mgr_cb_unbind);
 
    EINA_LIST_FOREACH(e_comp_wl->seat.resources, l, seat_res)
-     if (wl_resource_get_client(seat_res) == client) break;
-
-   if (!seat_res)
      {
-        DMERR("Could not find seat resource bound to the tizen_input_device_manager");
-        return;
-     }
+        if (wl_resource_get_client(seat_res) != client) continue;
 
-   wl_array_init(&axes);
-   serial = wl_display_next_serial(e_comp_wl->wl.disp);
+        wl_array_init(&axes);
+        serial = wl_display_next_serial(e_comp_wl->wl.disp);
 
-   EINA_LIST_FOREACH(e_comp_wl->input_device_manager.device_list, l, dev)
-     {
-        device_res = wl_resource_create(client, &tizen_input_device_interface, 1, 0);
-        if (!device_res)
+        EINA_LIST_FOREACH(e_comp_wl->input_device_manager.device_list, l, dev)
           {
-             DMERR("Could not create tizen_input_device resource: %m");
-             return;
+             device_res = wl_resource_create(client, &tizen_input_device_interface, 1, 0);
+             if (!device_res)
+               {
+                  DMERR("Could not create tizen_input_device resource: %m");
+                  return;
+               }
+             device_user_data = E_NEW(e_devicemgr_input_device_user_data, 1);
+             if (!device_user_data)
+               {
+                  DMERR("Failed to allocate memory for input device user data\n");
+                  return;
+               }
+             device_user_data->dev = dev;
+             device_user_data->dev_mgr_res = res;
+             device_user_data->seat_res = seat_res;
+
+             dev->resources = eina_list_append(dev->resources, device_res);
+
+             wl_resource_set_implementation(device_res, &_e_devicemgr_device_interface, device_user_data,
+                                            _e_devicemgr_device_cb_device_unbind);
+
+             tizen_input_device_manager_send_device_add(res, serial, dev->identifier, device_res, seat_res);
+             tizen_input_device_send_device_info(device_res, dev->name, dev->clas, TIZEN_INPUT_DEVICE_SUBCLAS_NONE, &axes);
           }
-        device_user_data = E_NEW(e_devicemgr_input_device_user_data, 1);
-        if (!device_user_data)
-          {
-             DMERR("Failed to allocate memory for input device user data\n");
-             return;
-          }
-        device_user_data->dev = dev;
-        device_user_data->dev_mgr_res = res;
-
-        dev->resources = eina_list_append(dev->resources, device_res);
-
-        wl_resource_set_implementation(device_res, &_e_devicemgr_device_interface, device_user_data,
-                                      _e_devicemgr_device_cb_device_unbind);
-
-        tizen_input_device_manager_send_device_add(res, serial, dev->identifier, device_res, seat_res);
-        tizen_input_device_send_device_info(device_res, dev->name, dev->clas, TIZEN_INPUT_DEVICE_SUBCLAS_NONE, &axes);
      }
 }
 
@@ -1338,6 +1340,7 @@ e_devicemgr_device_fini(void)
                {
                   device_user_data->dev = NULL;
                   device_user_data->dev_mgr_res = NULL;
+                  device_user_data->seat_res = NULL;
                   E_FREE(device_user_data);
                }
 
