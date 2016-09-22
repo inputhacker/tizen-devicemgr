@@ -682,11 +682,34 @@ _e_video_geometry_cal_to_input_rect(E_Video * video, Eina_Rectangle *srect, Eina
    drect->h = MAX(yf1, yf2) - drect->y;
 }
 
+static void
+_e_video_buffer_size_get(E_Pixmap *pixmap, int *bw, int *bh)
+{
+   E_Comp_Wl_Buffer *buffer = e_pixmap_resource_get(pixmap);
+
+   *bw = *bh = 0;
+
+   if (!buffer) return;
+
+   if (buffer->type == E_COMP_WL_BUFFER_TYPE_VIDEO)
+     {
+        tbm_surface_h tbm_surface = wayland_tbm_server_get_surface(NULL, buffer->resource);
+
+        *bw = tbm_surface_get_width(tbm_surface);
+        *bh = tbm_surface_get_height(tbm_surface);
+     }
+   else
+     {
+        *bw = buffer->w;
+        *bh = buffer->h;
+     }
+}
+
 static Eina_Bool
 _e_video_geometry_cal(E_Video * video)
 {
    Eina_Rectangle screen = {0,};
-   Eina_Rectangle output_r, input_r;
+   Eina_Rectangle output_r = {0,}, input_r = {0,};
 #ifdef HAVE_EOM
    const tdm_output_mode *mode = NULL;
    tdm_error tdm_err = TDM_ERROR_NONE;
@@ -715,6 +738,13 @@ _e_video_geometry_cal(E_Video * video)
 #endif
      {
         ecore_drm_output_current_resolution_get(video->drm_output, &screen.w, &screen.h, NULL);
+     }
+
+   _e_video_buffer_size_get(video->ec->pixmap, &input_r.w, &input_r.h);
+   if (!eina_rectangle_intersection(&video->geo.input_r, &input_r))
+     {
+        VER("input area is empty");
+        return EINA_FALSE;
      }
 
    if (video->geo.output_r.x >= 0 && video->geo.output_r.y >= 0 &&
