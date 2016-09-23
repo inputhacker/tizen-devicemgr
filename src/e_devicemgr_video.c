@@ -1505,6 +1505,16 @@ _e_video_cb_ec_buffer_change(void *data, int type, void *event)
    video = find_video_with_surface(ec->comp_data->surface);
    if (!video) return ECORE_CALLBACK_PASS_ON;
 
+#ifdef HAVE_EOM
+   /* skip external client buffer if its top parent is not current for eom anymore */
+   if (video->external_video && !e_devicemgr_eom_is_ec_external(ec))
+     {
+        VWR("skip external buffer");
+        return ECORE_CALLBACK_PASS_ON;
+     }
+
+#endif
+
    _e_video_render(video, __FUNCTION__);
 
    return ECORE_CALLBACK_PASS_ON;
