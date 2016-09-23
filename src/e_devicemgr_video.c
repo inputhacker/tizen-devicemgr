@@ -85,7 +85,6 @@ struct _E_Video
    E_Video_Fb *current_fb;
 
    Eina_Bool  cb_registered;
-   Eina_Rectangle eo_geo;
 };
 
 static Eina_List *video_list;
@@ -577,19 +576,22 @@ _e_video_geometry_cal_viewport(E_Video *video)
    return EINA_TRUE;
 }
 
-static void
+static Eina_Bool
 _e_video_geometry_cal_map(E_Video *video)
 {
-   E_Client *ec = video->ec;
+   E_Client *ec;
    const Evas_Map *m;
    Evas_Coord x1, x2, y1, y2;
-   Eina_Rectangle old_output_r = video->geo.output_r;
+   Eina_Rectangle output_r;
 
-   EINA_SAFETY_ON_NULL_RETURN(ec);
-   EINA_SAFETY_ON_NULL_RETURN(video->ec->frame);
+   EINA_SAFETY_ON_NULL_RETURN_VAL(video, EINA_FALSE);
+
+   ec = video->ec;
+   EINA_SAFETY_ON_NULL_RETURN_VAL(ec, EINA_FALSE);
+   EINA_SAFETY_ON_NULL_RETURN_VAL(ec->frame, EINA_FALSE);
 
    m = evas_object_map_get(ec->frame);
-   if (!m) return;
+   if (!m) return EINA_TRUE;
 
    /* If frame has map, it means that ec's geometry is decided by map's geometry.
     * ec->x,y,w,h and ec->client.x,y,w,h is not useful.
@@ -598,14 +600,21 @@ _e_video_geometry_cal_map(E_Video *video)
    evas_map_point_coord_get(m, 0, &x1, &y1, NULL);
    evas_map_point_coord_get(m, 2, &x2, &y2, NULL);
 
-   video->geo.output_r.x = x1;
-   video->geo.output_r.y = y1;
-   video->geo.output_r.w = x2 - x1;
-   video->geo.output_r.w = (video->geo.output_r.w + 1) & ~1;
-   video->geo.output_r.h = y2 - y1;
+   output_r.x = x1;
+   output_r.y = y1;
+   output_r.w = x2 - x1;
+   output_r.w = (output_r.w + 1) & ~1;
+   output_r.h = y2 - y1;
+
+   if (!memcmp(&video->geo.output_r, &output_r, sizeof(Eina_Rectangle)))
+     return EINA_FALSE;
 
    VDB("frame(%p) m(%p) output(%d,%d %dx%d) => (%d,%d %dx%d)", ec->frame, m,
-       EINA_RECTANGLE_ARGS(&old_output_r), EINA_RECTANGLE_ARGS(&video->geo.output_r));
+       EINA_RECTANGLE_ARGS(&video->geo.output_r), EINA_RECTANGLE_ARGS(&output_r));
+
+   video->geo.output_r = output_r;
+
+   return EINA_TRUE;
 }
 
 static void
@@ -1011,32 +1020,18 @@ static void
 _e_video_cb_evas_resize(void *data, Evas *e EINA_UNUSED, Evas_Object *obj, void *event_info EINA_UNUSED)
 {
    E_Video *video = data;
-   Evas_Coord w = 0, h = 0;
 
-   evas_object_geometry_get(obj, NULL, NULL, &w, &h);
-   if (video->eo_geo.w == w && video->eo_geo.h == h)
-     return;
-
-   video->eo_geo.w = w;
-   video->eo_geo.h = h;
-
-   _e_video_render(video, __FUNCTION__);
+   if (_e_video_geometry_cal_map(video))
+     _e_video_render(video, __FUNCTION__);
 }
 
 static void
 _e_video_cb_evas_move(void *data, Evas *e EINA_UNUSED, Evas_Object *obj EINA_UNUSED, void *event_info EINA_UNUSED)
 {
    E_Video *video = data;
-   Evas_Coord x = 0, y = 0;
 
-   evas_object_geometry_get(obj, &x, &y, NULL, NULL);
-   if (video->eo_geo.x == x && video->eo_geo.y == y)
-     return;
-
-   video->eo_geo.x = x;
-   video->eo_geo.y = y;
-
-   _e_video_render(video, __FUNCTION__);
+   if (_e_video_geometry_cal_map(video))
+     _e_video_render(video, __FUNCTION__);
 }
 
 static E_Video*
