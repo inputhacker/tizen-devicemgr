@@ -23,10 +23,10 @@
 
 #define ALEN(array) (sizeof(array) / sizeof(array)[0])
 
-#define EOMER(msg, ARG...) ERR("[eom module][%s:%d] ERR: " msg "\n", __FUNCTION__, __LINE__, ##ARG)
-#define EOMWR(msg, ARG...) WRN("[eom module][%s:%d] WRN: " msg "\n", __FUNCTION__, __LINE__, ##ARG)
-#define EOMIN(msg, ARG...) INF("[eom module][%s:%d] INF: " msg "\n", __FUNCTION__, __LINE__, ##ARG)
-#define EOMDB(msg, ARG...) DBG("[eom module][%s:%d] DBG: " msg "\n", __FUNCTION__, __LINE__, ##ARG)
+#define EOMER(msg, ARG...) ERR("[eom module][ERR] " msg, ##ARG)
+#define EOMWR(msg, ARG...) WRN("[eom module][WRN] " msg, ##ARG)
+#define EOMIN(msg, ARG...) INF("[eom module][INF] " msg, ##ARG)
+#define EOMDB(msg, ARG...) DBG("[eom module][DBG] " msg, ##ARG)
 
 #define EOM_NUM_ATTR 3
 #define EOM_CONNECT_CHECK_TIMEOUT 7.0
