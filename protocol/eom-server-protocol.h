@@ -1,3 +1,28 @@
+/*
+ * Copyright 2016 Samsung Electronics co., Ltd. All Rights Reserved.
+ *
+ * Permission to use, copy, modify, distribute, and sell this
+ * software and its documentation for any purpose is hereby granted
+ * without fee, provided that\n the above copyright notice appear in
+ * all copies and that both that copyright notice and this permission
+ * notice appear in supporting documentation, and that the name of
+ * the copyright holders not be used in advertising or publicity
+ * pertaining to distribution of the software without specific,
+ * written prior permission.  The copyright holders make no
+ * representations about the suitability of this software for any
+ * purpose.  It is provided "as is" without express or implied
+ * warranty.
+ *
+ * THE COPYRIGHT HOLDERS DISCLAIM ALL WARRANTIES WITH REGARD TO THIS
+ * SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND
+ * FITNESS, IN NO EVENT SHALL THE COPYRIGHT HOLDERS BE LIABLE FOR ANY
+ * SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
+ * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
+ * ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
+ * THIS SOFTWARE.
+ */
+
 #ifndef WL_EOM_SERVER_PROTOCOL_H
 #define WL_EOM_SERVER_PROTOCOL_H
 
@@ -31,33 +56,33 @@ enum wl_eom_error {
 #ifndef WL_EOM_TYPE_ENUM
 #define WL_EOM_TYPE_ENUM
 /**
- * wl_eom_type - connector type of the external output
+ * wl_eom_type - connector type
  * @WL_EOM_TYPE_NONE: none
  * @WL_EOM_TYPE_VGA: VGA output connector type
- * @WL_EOM_TYPE_DIVI: VGA output connector type
- * @WL_EOM_TYPE_DIVD: VGA output connector type
- * @WL_EOM_TYPE_DIVA: VGA output connector type
- * @WL_EOM_TYPE_COMPOSITE: VGA output connector type
- * @WL_EOM_TYPE_SVIDEO: VGA output connector type
- * @WL_EOM_TYPE_LVDS: VGA output connector type
- * @WL_EOM_TYPE_COMPONENT: VGA output connector type
- * @WL_EOM_TYPE_9PINDIN: VGA output connector type
- * @WL_EOM_TYPE_DISPLAYPORT: VGA output connector type
- * @WL_EOM_TYPE_HDMIA: VGA output connector type
- * @WL_EOM_TYPE_HDMIB: VGA output connector type
- * @WL_EOM_TYPE_TV: VGA output connector type
- * @WL_EOM_TYPE_EDP: VGA output connector type
- * @WL_EOM_TYPE_VIRTUAL: VGA output connector type
- * @WL_EOM_TYPE_DSI: VGA output connector type
+ * @WL_EOM_TYPE_DVII: DVI-I output connector type
+ * @WL_EOM_TYPE_DVID: DVI-D output connector type
+ * @WL_EOM_TYPE_DVIA: DVI-A output connector type
+ * @WL_EOM_TYPE_COMPOSITE: Composite output connector type
+ * @WL_EOM_TYPE_SVIDEO: S-Video output connector type
+ * @WL_EOM_TYPE_LVDS: LVDS output connector type
+ * @WL_EOM_TYPE_COMPONENT: Component output connector type
+ * @WL_EOM_TYPE_9PINDIN: 9 pin DIN output connector type
+ * @WL_EOM_TYPE_DISPLAYPORT: DisplayPort output connector type
+ * @WL_EOM_TYPE_HDMIA: HDMI type A output connector type
+ * @WL_EOM_TYPE_HDMIB: HDMI type B output connector type
+ * @WL_EOM_TYPE_TV: TV output connector type
+ * @WL_EOM_TYPE_EDP: eDP output connector type
+ * @WL_EOM_TYPE_VIRTUAL: Virtual output connector type
+ * @WL_EOM_TYPE_DSI: DSI output connector type
  *
- * ***** TODO ******
+ * Define several connectors type of the external outputs
  */
 enum wl_eom_type {
 	WL_EOM_TYPE_NONE = 0,
 	WL_EOM_TYPE_VGA = 1,
-	WL_EOM_TYPE_DIVI = 2,
-	WL_EOM_TYPE_DIVD = 3,
-	WL_EOM_TYPE_DIVA = 4,
+	WL_EOM_TYPE_DVII = 2,
+	WL_EOM_TYPE_DVID = 3,
+	WL_EOM_TYPE_DVIA = 4,
 	WL_EOM_TYPE_COMPOSITE = 5,
 	WL_EOM_TYPE_SVIDEO = 6,
 	WL_EOM_TYPE_LVDS = 7,
@@ -81,7 +106,7 @@ enum wl_eom_type {
  * @WL_EOM_STATUS_CONNECTION: output connected
  * @WL_EOM_STATUS_DISCONNECTION: output disconnected
  *
- * ***** TODO ******
+ * The status of external output is connected or not.
  */
 enum wl_eom_status {
 	WL_EOM_STATUS_NONE = 0,
@@ -98,7 +123,9 @@ enum wl_eom_status {
  * @WL_EOM_MODE_MIRROR: mirror mode
  * @WL_EOM_MODE_PRESENTATION: presentation mode
  *
- * ***** TODO ******
+ * There are two modes for external output. Mirror mode is showing main
+ * display screen to external output. Presentation mode is showing app's
+ * specific buffer contents to external output.
  */
 enum wl_eom_mode {
 	WL_EOM_MODE_NONE = 0,
@@ -113,15 +140,25 @@ enum wl_eom_mode {
  * wl_eom_attribute - attribute of the external output
  * @WL_EOM_ATTRIBUTE_NONE: none
  * @WL_EOM_ATTRIBUTE_NORMAL: nomal attribute
- * @WL_EOM_ATTRIBUTE_EXCLUSIVE_SHARED: exclusive shared attribute
+ * @WL_EOM_ATTRIBUTE_EXCLUSIVE_SHARE: exclusive share attribute
  * @WL_EOM_ATTRIBUTE_EXCLUSIVE: exclusive attribute
  *
- * ***** TODO ******
+ * Application can use external output by attribute.
+ *
+ * If application succeed to set attribute and set external output window,
+ * the external output's mode will be changed to Presentation mode.
+ *
+ * Attribute has priority. If attribute is set to normal, it can be changed
+ * by normal, exclusive_share, exclusive. If attribute is set to
+ * exclusive_share, it can be changed by exclusive_share, exclusive. If
+ * attribute is set to exclusive, it cannot be changed by other
+ * application. If application which set attribute is quit or set to none,
+ * the mode will be changed to Mirror if connected.
  */
 enum wl_eom_attribute {
 	WL_EOM_ATTRIBUTE_NONE = 0,
 	WL_EOM_ATTRIBUTE_NORMAL = 1,
-	WL_EOM_ATTRIBUTE_EXCLUSIVE_SHARED = 2,
+	WL_EOM_ATTRIBUTE_EXCLUSIVE_SHARE = 2,
 	WL_EOM_ATTRIBUTE_EXCLUSIVE = 3,
 };
 #endif /* WL_EOM_ATTRIBUTE_ENUM */
@@ -135,7 +172,15 @@ enum wl_eom_attribute {
  * @WL_EOM_ATTRIBUTE_STATE_INACTIVE: attribute is inactive on the output
  * @WL_EOM_ATTRIBUTE_STATE_LOST: the connection of output is lost
  *
- * ***** TODO ******
+ * It means the state of attribute. The applicatoin which set attribute
+ * successful can get state.
+ *
+ * Active means the external window is set to external output succefully.
+ * So application can use that window. Inactive means cannot use external
+ * output, because of dissconnecting or some other reasons. But if
+ * connected again, the application can use external output. Lost means the
+ * application is lost it's right to external output by other application's
+ * attribute set.
  */
 enum wl_eom_attribute_state {
 	WL_EOM_ATTRIBUTE_STATE_NONE = 0,
@@ -146,45 +191,57 @@ enum wl_eom_attribute_state {
 #endif /* WL_EOM_ATTRIBUTE_STATE_ENUM */
 
 /**
- * wl_eom - an interface to get the information of the external outputs
- * @set_attribute: (none)
- * @set_xdg_window: (none)
- * @set_shell_window: (none)
- * @get_output_info: (none)
+ * wl_eom - an interface for external outputs
+ * @set_attribute: api to set attribute to specific external output
+ * @set_xdg_window: set xdg surface to external window
+ * @set_shell_window: 
+ * @get_output_info: get information of external output
  *
- * ***** TODO ******
+ * An interface to get information of external outputs and to use
+ * external outputs.
  */
 struct wl_eom_interface {
 	/**
-	 * set_attribute - (none)
+	 * set_attribute - api to set attribute to specific external
+	 *	output
 	 * @output_id: (none)
 	 * @attribute: (none)
+	 *
+	 * Application can have right to external output by
+	 * set_attribute.
 	 */
 	void (*set_attribute)(struct wl_client *client,
 			      struct wl_resource *resource,
 			      uint32_t output_id,
 			      uint32_t attribute);
 	/**
-	 * set_xdg_window - (none)
+	 * set_xdg_window - set xdg surface to external window
 	 * @output_id: (none)
 	 * @surface: (none)
+	 *
+	 * Use xdg_shell_surface to external output.
 	 */
 	void (*set_xdg_window)(struct wl_client *client,
 			       struct wl_resource *resource,
 			       uint32_t output_id,
 			       struct wl_resource *surface);
 	/**
-	 * set_shell_window - (none)
+	 * set_shell_window - 
 	 * @output_id: (none)
 	 * @surface: (none)
+	 *
+	 * Use shell_surface to external output.
 	 */
 	void (*set_shell_window)(struct wl_client *client,
 				 struct wl_resource *resource,
 				 uint32_t output_id,
 				 struct wl_resource *surface);
 	/**
-	 * get_output_info - (none)
+	 * get_output_info - get information of external output
 	 * @output_id: (none)
+	 *
+	 * Request to server to send information of specific external
+	 * output to client by output id.
 	 */
 	void (*get_output_info)(struct wl_client *client,
 				struct wl_resource *resource,
