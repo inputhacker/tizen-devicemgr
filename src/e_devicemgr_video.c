@@ -1861,3 +1861,24 @@ e_devicemgr_video_drm_output_get(E_Video *video)
 
    return video->drm_output;
 }
+
+#ifdef HAVE_EOM
+tdm_layer *
+e_devicemgr_video_layer_get(tdm_output *output)
+{
+   E_Video *video;
+   Eina_List *l;
+
+   if (!output)
+     return NULL;
+
+   EINA_LIST_FOREACH(video_list, l, video)
+     {
+        if (video->output == output)
+          return video->layer;
+     }
+
+   return NULL;
+}
+#endif
+

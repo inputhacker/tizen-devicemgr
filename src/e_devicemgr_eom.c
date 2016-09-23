@@ -3,6 +3,7 @@
 #include "e_devicemgr_privates.h"
 #include "e_devicemgr_buffer.h"
 #include "e_devicemgr_tdm.h"
+#include "e_devicemgr_video.h"
 #include "e_devicemgr_eom.h"
 #include "eom-server-protocol.h"
 #include <Ecore_Drm.h>
@@ -1552,6 +1553,23 @@ _e_eom_output_by_ec_child_get(E_Client *ec)
 }
 
 static void
+_e_eom_output_hide_layers(E_EomOutputPtr eom_output)
+{
+   tdm_layer * layer = NULL;
+
+   if (!eom_output || eom_output->state == NONE)
+     return;
+
+   layer = e_devicemgr_video_layer_get(eom_output->output);
+   if (!layer)
+     return;
+
+   /* XXX: sometimes video buffers are keep showing on a layer, therefore
+    * we have to clear those stuck buffers from a layer */
+   tdm_layer_unset_buffer(layer);
+}
+
+static void
 _e_eom_cb_wl_eom_client_destory(struct wl_resource *resource)
 {
    E_EomClientPtr client = NULL, iterator = NULL;
@@ -1732,6 +1750,8 @@ end:
 
    /* Set the client as current client of the eom_output */
    eom_client->current= EINA_TRUE;
+
+   _e_eom_output_hide_layers(eom_output);
 
    if (eom_output->status == TDM_OUTPUT_CONN_STATUS_DISCONNECTED)
      eom_output->state = WAIT_PRESENTATION;

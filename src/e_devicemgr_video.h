@@ -18,5 +18,8 @@ E_Video* e_devicemgr_video_get(struct wl_resource *surface);
 E_Devmgr_Buf* e_devicemgr_video_fb_get(E_Video *video);
 void e_devicemgr_video_pos_get(E_Video *video, int *x, int *y);
 Ecore_Drm_Output* e_devicemgr_video_drm_output_get(E_Video *video);
+#ifdef HAVE_EOM
+tdm_layer* e_devicemgr_video_layer_get(tdm_output *output);
+#endif
 
 #endif
