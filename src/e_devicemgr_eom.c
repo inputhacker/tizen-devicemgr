@@ -1041,41 +1041,6 @@ _e_eom_output_get_best_mode(tdm_output *output)
    return mode;
 }
 
-static int
-_e_eom_output_get_position(void)
-{
-   tdm_output *output_main = NULL;
-   tdm_error ret = TDM_ERROR_NONE;
-   const tdm_output_mode *mode;
-   int x = 0;
-
-   output_main = tdm_display_get_output(g_eom->dpy, 0, &ret);
-   EINA_SAFETY_ON_FALSE_RETURN_VAL(ret == TDM_ERROR_NONE, 0);
-   EINA_SAFETY_ON_NULL_RETURN_VAL(output_main, 0);
-
-   ret = tdm_output_get_mode(output_main, &mode);
-   EINA_SAFETY_ON_FALSE_RETURN_VAL(ret == TDM_ERROR_NONE, 0);
-
-   if (mode == NULL)
-     x = 0;
-   else
-     x = mode->hdisplay;
-
-   if (g_eom->outputs)
-     {
-        Eina_List *l;
-        E_EomOutputPtr eom_output_tmp;
-
-        EINA_LIST_FOREACH(g_eom->outputs, l, eom_output_tmp)
-          {
-             if (eom_output_tmp->status != TDM_OUTPUT_CONN_STATUS_DISCONNECTED)
-               x += eom_output_tmp->width;
-          }
-     }
-
-   return x;
-}
-
 static Eina_Bool
 _e_eom_timer_delayed_presentation_mode(void *data)
 {
@@ -1101,19 +1066,11 @@ _e_eom_output_connected(E_EomOutputPtr eom_output)
    E_EomClientPtr iterator = NULL;
    Eina_List *l;
    const tdm_output_mode *mode;
-   const char *maker = NULL, *model = NULL, *name = NULL;
-   unsigned int mmWidth, mmHeight, subpixel;
-   int x = 0;
+   unsigned int mmWidth, mmHeight;
 
    output = eom_output->output;
 
-   ret = tdm_output_get_model_info(output, &maker, &model, &name);
-   EINA_SAFETY_ON_FALSE_RETURN_VAL(ret == TDM_ERROR_NONE, -1);
-
    ret = tdm_output_get_physical_size(output, &mmWidth, &mmHeight);
-   EINA_SAFETY_ON_FALSE_RETURN_VAL(ret == TDM_ERROR_NONE, -1);
-
-   ret = tdm_output_get_subpixel(output, &subpixel);
    EINA_SAFETY_ON_FALSE_RETURN_VAL(ret == TDM_ERROR_NONE, -1);
 
    /* XXX: TMD returns not correct Primary mode for external output,
@@ -1124,25 +1081,13 @@ _e_eom_output_connected(E_EomOutputPtr eom_output)
    ret = tdm_output_set_mode(output, mode);
    EINA_SAFETY_ON_FALSE_RETURN_VAL(ret == TDM_ERROR_NONE, -1);
 
-   x = _e_eom_output_get_position();
-   EOMDB("mode: %dx%d, phy(%dx%d), pos(%d,0), refresh:%d, subpixel:%d",
-           mode->hdisplay, mode->vdisplay, mmWidth, mmHeight, x, mode->vrefresh, subpixel);
-
-   if (!e_comp_wl_output_init(eom_output->name, maker, eom_output->name, x, 0,
-                              mode->hdisplay, mode->vdisplay,
-                              mmWidth, mmHeight, mode->vrefresh, subpixel, 0))
-     {
-        EOMER("Could not setup new output: %s", eom_output->name);
-        return -1;
-     }
-
-   EOMDB("Setup new output: %s", eom_output->name);
-
    /* update eom_output connect */
    eom_output->width = mode->hdisplay;
    eom_output->height = mode->vdisplay;
    eom_output->phys_width = mmWidth;
    eom_output->phys_height = mmHeight;
+
+   EOMDB("Setup new output: %s", eom_output->name);
 
    /* TODO: check output mode(presentation set) and HDMI type */
 
@@ -1241,7 +1186,6 @@ _e_eom_output_disconnected(E_EomOutputPtr eom_output)
           }
      }
 
-   e_comp_wl_output_remove(eom_output->name);
    EOMDB("Destory output: %s", eom_output->name);
    eina_stringshare_del(eom_output->name);
    eom_output->name = NULL;
