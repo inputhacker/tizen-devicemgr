@@ -1597,11 +1597,10 @@ _e_devicemgr_video_object_destroy(struct wl_resource *resource)
    EINA_SAFETY_ON_NULL_RETURN(video);
 
    VDT("Video from Client(%s):PID(%d) is being destroyed, details are: "
-       "RscID(%d), Buffer(%p), Video_Format(%c%c%c%c), "
+       "Buffer(%p), Video_Format(%c%c%c%c), "
        "Buffer_Size(%dx%d), Src Rect(%d,%d, %dx%d), Dest Rect(%d,%d, %dx%d),"
        " Transformed(%d)",
        e_client_util_name_get(video->ec) ?: "No Name" , video->ec->netwm.pid,
-       wl_resource_get_id(video->surface),
        video->current_fb?video->current_fb->mbuf:0, FOURCC_STR(video->tbmfmt),
        video->geo.input_w, video->geo.input_h, video->geo.input_r.x ,
        video->geo.input_r.y, video->geo.input_r.w, video->geo.input_r.h,
