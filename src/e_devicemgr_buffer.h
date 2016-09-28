@@ -27,6 +27,8 @@ typedef struct _E_Devmgr_Buf
 
    /* to manage wl_resource */
    struct wl_resource *resource;
+   struct wl_listener destroy_listener;
+
    Eina_Bool buffer_destroying;
 
    E_Devmgr_Buf_Type type;

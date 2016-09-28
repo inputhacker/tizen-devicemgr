@@ -39,6 +39,7 @@ typedef struct _MBufFreeFuncInfo
    void *data;
 } MBufFreeFuncInfo;
 
+static void _e_devmgr_buffer_cb_destroy(struct wl_listener *listener, void *data);
 static void _e_devmgr_buffer_free(E_Devmgr_Buf *mbuf, const char *func);
 #define e_devmgr_buffer_free(b) _e_devmgr_buffer_free(b,__FUNCTION__)
 
@@ -193,6 +194,9 @@ _e_devmgr_buffer_create(struct wl_resource *resource, const char *func)
    mbuf->func = strdup(func);
 
    mbuf->resource = resource;
+
+   mbuf->destroy_listener.notify = _e_devmgr_buffer_cb_destroy;
+   wl_resource_add_destroy_listener(resource, &mbuf->destroy_listener);
 
    if ((shm_buffer = wl_shm_buffer_get(resource)))
      {
@@ -534,6 +538,12 @@ _e_devmgr_buffer_free(E_Devmgr_Buf *mbuf, const char *func)
 
    MBUF_RETURN_IF_FAIL(_e_devmgr_buffer_valid(mbuf, func));
 
+   if (mbuf->destroy_listener.notify)
+     {
+        wl_list_remove(&mbuf->destroy_listener.link);
+        mbuf->destroy_listener.notify = NULL;
+     }
+
    EINA_LIST_FOREACH_SAFE(mbuf->free_funcs, l, ll, info)
      {
         /* call before tmb_bo_unref */
@@ -543,8 +553,14 @@ _e_devmgr_buffer_free(E_Devmgr_Buf *mbuf, const char *func)
         free(info);
      }
 
+#if 0
+   /* DO not check ref_count here. Even if ref_count is not 0, mbuf can be
+    * be destroyed by wl_buffer_destroy forcely. video or screenmirror should add
+    * the mbuf free function and handle the destroying mbuf situation.
+    */
    if (!mbuf->buffer_destroying)
      MBUF_RETURN_IF_FAIL(mbuf->ref_cnt == 0);
+#endif
 
    /* make sure all operation is done */
    MBUF_RETURN_IF_FAIL(mbuf->showing == EINA_FALSE);
@@ -565,6 +581,13 @@ _e_devmgr_buffer_free(E_Devmgr_Buf *mbuf, const char *func)
      free(mbuf->func);
 
    free(mbuf);
+}
+
+static void
+_e_devmgr_buffer_cb_destroy(struct wl_listener *listener, void *data)
+{
+   E_Devmgr_Buf *mbuf = container_of(listener, E_Devmgr_Buf, destroy_listener);
+   e_devmgr_buffer_free(mbuf);
 }
 
 void

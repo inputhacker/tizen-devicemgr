@@ -531,6 +531,14 @@ _e_tz_screenmirror_buffer_cb_destroy(struct wl_listener *listener, void *data)
    _e_tz_screenmirror_buffer_free(buffer);
 }
 
+static void
+_e_tz_screenmirror_buffer_cb_free(E_Devmgr_Buf *mbuf, void *data)
+{
+   E_Mirror_Buffer *buffer = data;
+
+   _e_tz_screenmirror_buffer_free(buffer);
+}
+
 static E_Mirror_Buffer*
 _e_tz_screenmirror_buffer_get(E_Mirror *mirror, struct wl_resource *resource)
 {
@@ -557,6 +565,8 @@ _e_tz_screenmirror_buffer_get(E_Mirror *mirror, struct wl_resource *resource)
 
    buffer->destroy_listener.notify = _e_tz_screenmirror_buffer_cb_destroy;
    wl_resource_add_destroy_listener(resource, &buffer->destroy_listener);
+
+   e_devmgr_buffer_free_func_add(buffer->mbuf, _e_tz_screenmirror_buffer_cb_free, buffer);
 
    return buffer;
 fail_get:
