@@ -1229,7 +1229,7 @@ _e_video_destroy(E_Video *video)
 
 #if 0
    if (e_devmgr_buffer_list_length() > 0)
-     e_devmgr_buffer_list_print();
+     e_devmgr_buffer_list_print(NULL);
 #endif
 }
 
@@ -1771,12 +1771,19 @@ _e_devicemgr_video_cb_bind(struct wl_client *client, void *data, uint32_t versio
 
 static Eina_List *video_hdlrs;
 
+static void
+_e_devicemgr_mbuf_print(void *data, const char *log_path)
+{
+   e_devmgr_buffer_list_print(log_path);
+}
+
 int
 e_devicemgr_video_init(void)
 {
    if (!e_comp_wl) return 0;
    if (!e_comp_wl->wl.disp) return 0;
 
+   e_info_server_hook_set("mbuf", _e_devicemgr_mbuf_print, NULL);
 
    _video_detail_log_dom = eina_log_domain_register("e-devicemgr-video", EINA_COLOR_BLUE);
    if (_video_detail_log_dom < 0)
@@ -1810,6 +1817,8 @@ void
 e_devicemgr_video_fini(void)
 {
    E_FREE_LIST(video_hdlrs, ecore_event_handler_del);
+
+   e_info_server_hook_set("mbuf_list", NULL, NULL);
 
    eina_log_domain_unregister(_video_detail_log_dom);
    _video_detail_log_dom = -1;

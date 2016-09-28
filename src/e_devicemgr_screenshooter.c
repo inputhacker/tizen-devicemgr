@@ -753,7 +753,7 @@ _e_tz_screenmirror_destroy(E_Mirror *mirror)
    keep_mirror = NULL;
 #if 0
    if (e_devmgr_buffer_list_length() > 0)
-     e_devmgr_buffer_list_print();
+     e_devmgr_buffer_list_print(NULL);
 #endif
 }
 

@@ -100,6 +100,6 @@ E_Devmgr_Buf_Color_Type e_devmgr_buffer_color_type(tbm_format tbmfmt);
 void e_devmgr_buffer_dump(E_Devmgr_Buf *mbuf, const char *prefix, int nth, Eina_Bool raw);
 uint e_devmgr_buffer_get_mills(void);
 int  e_devmgr_buffer_list_length(void);
-void e_devmgr_buffer_list_print(void);
+void e_devmgr_buffer_list_print(const char *log_path);
 
 #endif

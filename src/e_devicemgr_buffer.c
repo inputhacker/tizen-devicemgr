@@ -1126,20 +1126,32 @@ e_devmgr_buffer_list_length(void)
 }
 
 void
-e_devmgr_buffer_list_print(void)
+e_devmgr_buffer_list_print(const char *log_path)
 {
    E_Devmgr_Buf *mbuf;
    Eina_List *l;
+   FILE *log_fl;
 
-   INF("* Devicemgr Buffers:");
-   INF("stamp\tsize\tformat\thandles\tpitches\toffsets\tcreator\tshowing");
+   log_fl = fopen(log_path, "a");
+   if (!log_fl)
+     {
+        ERR("failed: open file(%s)", log_path);
+        return;
+     }
+
+   setvbuf(log_fl, NULL, _IOLBF, 512);
+
+   fprintf(log_fl, "* Devicemgr Buffers:\n");
+   fprintf(log_fl, "stamp\tsize\tformat\thandles\tpitches\toffsets\tcreator\tshowing\n");
    EINA_LIST_FOREACH(mbuf_lists, l, mbuf)
      {
-        INF("%d\t%dx%d\t%c%c%c%c\t%d,%d,%d\t%d,%d,%d\t%d,%d,%d\t%s\t%d",
-            mbuf->stamp, mbuf->width, mbuf->height, FOURCC_STR(mbuf->tbmfmt),
-            mbuf->handles[0], mbuf->handles[1], mbuf->handles[2],
-            mbuf->pitches[0], mbuf->pitches[1], mbuf->pitches[2],
-            mbuf->offsets[0], mbuf->offsets[1], mbuf->offsets[2],
-            mbuf->func, mbuf->showing);
+        fprintf(log_fl, "%d\t%dx%d\t%c%c%c%c\t%d,%d,%d\t%d,%d,%d\t%d,%d,%d\t%s\t%d\n",
+                mbuf->stamp, mbuf->width, mbuf->height, FOURCC_STR(mbuf->tbmfmt),
+                mbuf->handles[0], mbuf->handles[1], mbuf->handles[2],
+                mbuf->pitches[0], mbuf->pitches[1], mbuf->pitches[2],
+                mbuf->offsets[0], mbuf->offsets[1], mbuf->offsets[2],
+                mbuf->func, mbuf->showing);
      }
+
+   fclose(log_fl);
 }
