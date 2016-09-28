@@ -563,7 +563,7 @@ _e_devmgr_buffer_free(E_Devmgr_Buf *mbuf, const char *func)
 #endif
 
    /* make sure all operation is done */
-   MBUF_RETURN_IF_FAIL(mbuf->showing == EINA_FALSE);
+   MBUF_RETURN_IF_FAIL(mbuf->in_use == EINA_FALSE);
 
    if (mbuf->type == TYPE_TBM && mbuf->tbm_surface)
      {
@@ -1142,7 +1142,7 @@ e_devmgr_buffer_list_print(const char *log_path)
    setvbuf(log_fl, NULL, _IOLBF, 512);
 
    fprintf(log_fl, "* Devicemgr Buffers:\n");
-   fprintf(log_fl, "stamp\tsize\tformat\thandles\tpitches\toffsets\tcreator\tshowing\n");
+   fprintf(log_fl, "stamp\tsize\tformat\thandles\tpitches\toffsets\tcreator\tin_use\n");
    EINA_LIST_FOREACH(mbuf_lists, l, mbuf)
      {
         fprintf(log_fl, "%d\t%dx%d\t%c%c%c%c\t%d,%d,%d\t%d,%d,%d\t%d,%d,%d\t%s\t%d\n",
@@ -1150,7 +1150,7 @@ e_devmgr_buffer_list_print(const char *log_path)
                 mbuf->handles[0], mbuf->handles[1], mbuf->handles[2],
                 mbuf->pitches[0], mbuf->pitches[1], mbuf->pitches[2],
                 mbuf->offsets[0], mbuf->offsets[1], mbuf->offsets[2],
-                mbuf->func, mbuf->showing);
+                mbuf->func, mbuf->in_use);
      }
 
    fclose(log_fl);

@@ -95,7 +95,6 @@ static void _e_video_render(E_Video *video, const char *func);
 static Eina_Bool _e_video_frame_buffer_show(E_Video *video, E_Video_Fb *vfb);
 static void _e_video_frame_buffer_destroy(E_Video_Fb *vfb);
 static void _e_video_buffer_show(E_Video *video, E_Devmgr_Buf *mbuf, Eina_Rectangle *visible, unsigned int transform);
-static void _e_video_input_buffer_cb_release(tbm_surface_h surface, void *user_data);
 static void _e_video_pp_buffer_cb_release(tbm_surface_h surface, void *user_data);
 
 static int
@@ -371,6 +370,9 @@ _e_video_pp_buffer_get(E_Video *video, int width, int height)
 
              e_devmgr_buffer_free_func_add(mbuf, _e_video_pp_buffer_cb_free, video);
              video->pp_buffer_list = eina_list_append(video->pp_buffer_list, mbuf);
+
+             tdm_buffer_add_release_handler(mbuf->tbm_surface,
+                                            _e_video_pp_buffer_cb_release, mbuf);
           }
 
         VIN("pp buffer created: %dx%d, %c%c%c%c",
@@ -387,7 +389,7 @@ _e_video_pp_buffer_get(E_Video *video, int width, int height)
      {
         video->next_buffer = (video->next_buffer->next) ? video->next_buffer->next : video->pp_buffer_list;
 
-        if (!mbuf->showing)
+        if (!mbuf->in_use)
           return mbuf;
 
         if (l == video->next_buffer)
@@ -830,17 +832,11 @@ _e_video_frame_buffer_create(E_Video *video, E_Devmgr_Buf *mbuf, Eina_Rectangle 
 static void
 _e_video_frame_buffer_destroy(E_Video_Fb *vfb)
 {
-   E_Video *video;
-
    if (!vfb) return;
 
-   video = vfb->video;
    if (vfb->mbuf)
-     {
-        vfb->mbuf->showing = EINA_FALSE;
-        VDB("mbuf(%d) hidden", MSTAMP(vfb->mbuf));
-        e_devmgr_buffer_unref(vfb->mbuf);
-     }
+     e_devmgr_buffer_unref(vfb->mbuf);
+
    e_comp_wl_buffer_reference(&vfb->buffer_ref, NULL);
    free (vfb);
 }
@@ -875,8 +871,6 @@ _e_video_commit_handler(tdm_output *output, unsigned int sequence,
      }
 
    video->current_fb = vfb;
-
-   VDB("mbuf(%d) showing", MSTAMP(vfb->mbuf));
 
    if ((vfb = eina_list_nth(video->waiting_list, 0)))
      _e_video_frame_buffer_show(video, vfb);
@@ -921,6 +915,8 @@ _e_video_frame_buffer_show(E_Video *video, E_Video_Fb *vfb)
 
    ret = tdm_layer_set_buffer(video->layer, vfb->mbuf->tbm_surface);
    EINA_SAFETY_ON_FALSE_GOTO(ret == TDM_ERROR_NONE, show_fail);
+
+   vfb->mbuf->in_use = EINA_TRUE;
 
    ret = tdm_output_commit(video->output, 0, _e_video_commit_handler, video);
    EINA_SAFETY_ON_FALSE_GOTO(ret == TDM_ERROR_NONE, show_fail);
@@ -983,9 +979,6 @@ _e_video_buffer_show(E_Video *video, E_Devmgr_Buf *mbuf, Eina_Rectangle *visible
    EINA_SAFETY_ON_NULL_RETURN(vfb);
 
    video->waiting_list = eina_list_append(video->waiting_list, vfb);
-
-   vfb->mbuf->showing = EINA_TRUE;
-   VDB("mbuf(%d) waiting", MSTAMP(vfb->mbuf));
 
    /* XXX: Sometimes there are more then 2 buffers if it is used
     * for displaying video on external output */
@@ -1204,11 +1197,7 @@ _e_video_destroy(E_Video *video)
 
    /* others */
    EINA_LIST_FOREACH_SAFE(video->input_buffer_list, l, ll, mbuf)
-     {
-        tdm_buffer_remove_release_handler(mbuf->tbm_surface,
-                                          _e_video_input_buffer_cb_release, mbuf);
-        e_devmgr_buffer_unref(mbuf);
-     }
+     e_devmgr_buffer_unref(mbuf);
 
    EINA_LIST_FOREACH_SAFE(video->pp_buffer_list, l, ll, mbuf)
      {
@@ -1284,42 +1273,50 @@ need_pp:
    return EINA_TRUE;
 }
 
-static void
-_e_video_input_buffer_cb_release(tbm_surface_h surface, void *user_data)
+static E_Devmgr_Buf*
+_e_video_mbuf_find(Eina_List *list, tbm_surface_h buffer)
 {
-   E_Devmgr_Buf *mbuf = user_data;
+   E_Devmgr_Buf *mbuf;
+   Eina_List *l = NULL;
 
-   tdm_buffer_remove_release_handler(surface, _e_video_input_buffer_cb_release, mbuf);
+   EINA_LIST_FOREACH(list, l, mbuf)
+     {
+        if (mbuf->tbm_surface == buffer)
+           return mbuf;
+     }
 
-   /* unref input_buffer because we don't need input buffer any more after pp done */
-   e_devmgr_buffer_unref(mbuf);
+   return NULL;
 }
 
 static void
 _e_video_pp_buffer_cb_release(tbm_surface_h surface, void *user_data)
 {
+   E_Devmgr_Buf *mbuf = (E_Devmgr_Buf*)user_data;
+
+   mbuf->in_use = EINA_FALSE;
+}
+
+static void
+_e_video_pp_cb_done(tdm_pp *pp, tbm_surface_h sb, tbm_surface_h db, void *user_data)
+{
    E_Video *video = (E_Video*)user_data;
-   E_Devmgr_Buf *mbuf;
-   Eina_List *l;
+   E_Devmgr_Buf *input_buffer, *pp_buffer;
 
-   EINA_LIST_FOREACH(video->pp_buffer_list, l, mbuf)
+   input_buffer = _e_video_mbuf_find(video->input_buffer_list, sb);
+   if (input_buffer)
+     e_devmgr_buffer_unref(input_buffer);
+
+   pp_buffer = _e_video_mbuf_find(video->pp_buffer_list, db);
+   if (pp_buffer)
      {
-        if (mbuf->tbm_surface == surface)
-           break;
-     }
+        _e_video_buffer_show(video, pp_buffer, &video->pp_r, 0);
 
-   if (!mbuf)
-     return;
-
-   tdm_buffer_remove_release_handler(surface, _e_video_pp_buffer_cb_release, video);
-
-   _e_video_buffer_show(video, mbuf, &video->pp_r, 0);
-
-   /* don't unref pp_buffer here because we will unref it when video destroyed */
+        /* don't unref pp_buffer here because we will unref it when video destroyed */
 #ifdef DUMP_BUFFER
-   static int i;
-   e_devmgr_buffer_dump(mbuf, "out", i++, 0);
+        static int i;
+        e_devmgr_buffer_dump(pp_buffer, "out", i++, 0);
 #endif
+     }
 }
 
 static void
@@ -1420,6 +1417,9 @@ _e_video_render(E_Video *video, const char *func)
         if (tdm_pp_set_info(video->pp, &info))
           goto render_fail;
 
+        if (tdm_pp_set_done_handler(video->pp, _e_video_pp_cb_done, video))
+          goto render_fail;
+
         CLEAR(video->pp_r);
         video->pp_r.w = info.dst_config.pos.w;
         video->pp_r.h = info.dst_config.pos.h;
@@ -1429,13 +1429,10 @@ _e_video_render(E_Video *video, const char *func)
    e_devmgr_buffer_dump(input_buffer, "in", i++, 0);
 #endif
 
-   tdm_buffer_add_release_handler(input_buffer->tbm_surface,
-                                  _e_video_input_buffer_cb_release, input_buffer);
-   tdm_buffer_add_release_handler(pp_buffer->tbm_surface,
-                                  _e_video_pp_buffer_cb_release, video);
-
    if (tdm_pp_attach(video->pp, input_buffer->tbm_surface, pp_buffer->tbm_surface))
      goto render_fail;
+
+   pp_buffer->in_use = EINA_TRUE;
 
    if (tdm_pp_commit(video->pp))
      goto render_fail;
@@ -1447,19 +1444,8 @@ _e_video_render(E_Video *video, const char *func)
 
 render_fail:
    if (input_buffer)
-     {
-        tdm_buffer_remove_release_handler(input_buffer->tbm_surface,
-                                          _e_video_input_buffer_cb_release, input_buffer);
+     e_devmgr_buffer_unref(input_buffer);
 
-        e_devmgr_buffer_unref(input_buffer);
-     }
-
-   if (pp_buffer)
-     {
-        tdm_buffer_remove_release_handler(pp_buffer->tbm_surface,
-                                          _e_video_pp_buffer_cb_release, input_buffer);
-        /* don't unref pp_buffer here because we will unref it when video destroyed */
-     }
 done:
    if (!video->cb_registered)
      {

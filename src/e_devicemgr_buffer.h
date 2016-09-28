@@ -49,7 +49,7 @@ typedef struct _E_Devmgr_Buf
    int width_from_pitch;
 
    /* to avoid reading & write at same time */
-   Eina_Bool showing;
+   Eina_Bool in_use;
 
    Eina_List *free_funcs;
 
