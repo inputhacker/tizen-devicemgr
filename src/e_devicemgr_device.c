@@ -806,7 +806,7 @@ _e_input_devmgr_inputgen_client_cb_destroy(struct wl_listener *l, void *data)
 {
    struct wl_client *client = (struct wl_client *)data;
 
-   input_devmgr_data->inputgen.ref--;
+   if (input_devmgr_data->inputgen.ref > 0) input_devmgr_data->inputgen.ref--;
    if (input_devmgr_data->inputgen.ref == 0)
      {
         _e_input_devmgr_inputgen_generator_remove_keyboard();
@@ -1047,7 +1047,7 @@ _e_input_devmgr_cb_deinit_generator(struct wl_client *client, struct wl_resource
         goto finish;
      }
 #endif
-   input_devmgr_data->inputgen.ref--;
+   if (input_devmgr_data->inputgen.ref > 0) input_devmgr_data->inputgen.ref--;
    if (input_devmgr_data->inputgen.ref == 0)
      {
         _e_input_devmgr_inputgen_generator_remove_keyboard();
