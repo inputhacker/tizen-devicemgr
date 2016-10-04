@@ -1013,7 +1013,10 @@ _e_eom_output_get_best_mode(tdm_output *output)
    tdm_error ret = TDM_ERROR_NONE;
    const tdm_output_mode *modes;
    const tdm_output_mode *mode = NULL;
+   const tdm_output_mode *preferred_mode = NULL;
+   const tdm_output_mode *best_mode = NULL;
    unsigned int best_value = 0;
+   unsigned int best_refresh = 0;
    unsigned int value;
    int i, count = 0;
 
@@ -1026,15 +1029,34 @@ _e_eom_output_get_best_mode(tdm_output *output)
 
    for (i = 0; i < count; i++)
      {
+        if (modes[i].type & TDM_OUTPUT_MODE_TYPE_PREFERRED)
+          preferred_mode = &modes[i];
+
         value = modes[i].vdisplay + modes[i].hdisplay;
-        if (value >= best_value)
+        if (value > best_value)
           {
              best_value = value;
-             mode = &modes[i];
+             best_refresh = modes[i].vrefresh;
+             best_mode = &modes[i];
+          }
+        else if (value == best_value)
+          {
+            if (modes[i].vrefresh > best_refresh)
+              {
+                 best_value = value;
+                 best_refresh = modes[i].vrefresh;
+                 best_mode = &modes[i];
+              }
           }
      }
 
-   EOMDB("bestmode : %s, (%dx%d) r(%d), f(%d), t(%d)",
+   if (preferred_mode)
+     mode = preferred_mode;
+   else if (best_mode)
+     mode = best_mode;
+
+   if (mode)
+     EOMDB("bestmode : %s, (%dx%d) r(%d), f(%d), t(%d)",
            mode->name, mode->hdisplay, mode->vdisplay,
            mode->vrefresh, mode->flags, mode->type);
 
