@@ -73,6 +73,7 @@ static E_Mirror *keep_mirror;
 
 static void _e_tz_screenmirror_destroy(E_Mirror *mirror);
 static void _e_tz_screenmirror_buffer_dequeue(E_Mirror_Buffer *buffer);
+static void _e_tz_screenmirror_buffer_cb_free(E_Devmgr_Buf *mbuf, void *data);
 static void _e_tz_screenmirror_vblank_handler(void *data);
 
 static void
@@ -517,18 +518,19 @@ _e_tz_screenmirror_buffer_free(E_Mirror_Buffer *buffer)
    wl_list_remove(&buffer->destroy_listener.link);
 
    if (buffer->mbuf)
-     e_devmgr_buffer_unref(buffer->mbuf);
+     {
+        e_devmgr_buffer_free_func_del(buffer->mbuf, _e_tz_screenmirror_buffer_cb_free, buffer);
+        e_devmgr_buffer_unref(buffer->mbuf);
 
-   mirror->buffer_clear_check = eina_list_remove(mirror->buffer_clear_check, buffer->mbuf);
+        mirror->buffer_clear_check = eina_list_remove(mirror->buffer_clear_check, buffer->mbuf);
+     }
+
    E_FREE(buffer);
 }
 
 static void
 _e_tz_screenmirror_buffer_cb_destroy(struct wl_listener *listener, void *data)
 {
-   E_Mirror_Buffer *buffer = container_of(listener, E_Mirror_Buffer, destroy_listener);
-
-   _e_tz_screenmirror_buffer_free(buffer);
 }
 
 static void
