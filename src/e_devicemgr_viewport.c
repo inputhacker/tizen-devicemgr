@@ -1475,11 +1475,106 @@ _e_devicemgr_viewport_get_viewport(struct wl_resource *resource)
    return NULL;
 }
 
+static void
+_e_devicemgr_viewport_print(void *data, const char *log_path)
+{
+   FILE *log_fl;
+   Evas_Object *o;
+   const char *dest_type_str[] = { "None", "Rect", "Ratio", "Mode" };
+   const char *mode_str[] = { "None", "LetterBox", "Origin", "Full", "Cropped_Full", "Origin_or_Letter" };
+   int first_line = 1;
+   log_fl = fopen(log_path, "a");
+   if (!log_fl)
+     {
+        ERR("failed: open file(%s)", log_path);
+        return;
+     }
+
+   setvbuf(log_fl, NULL, _IOLBF, 512);
+
+   // append clients.
+   for (o = evas_object_top_get(e_comp->evas); o; o = evas_object_below_get(o))
+     {
+        E_Client *ec;
+        E_Viewport *viewport;
+        Ecore_Window win = 0;
+        const char *name = NULL;
+
+        ec = evas_object_data_get(o, "E_Client");
+        if (!ec || e_object_is_del(E_OBJECT(ec)) || !ec->comp_data) continue;
+
+        viewport = _e_devicemgr_viewport_get_viewport(ec->comp_data->scaler.viewport);
+        if (!viewport) continue;
+
+        if (first_line)
+          {
+             fprintf(log_fl, "\n[ viewport information ]\n");
+             first_line = 0;
+          }
+
+        win = e_client_util_win_get(ec);
+        name = e_client_util_name_get(ec);
+        if (!name)
+          name = "NO NAME";
+
+        fprintf(log_fl, "* WinID: 0x%08x '%s'\n", win, name);
+        if (viewport->transform > 0)
+          fprintf(log_fl, "\t  transform: %d%s\n",
+                  (4 - (viewport->transform & 3)) * 90 % 360,
+                  (viewport->transform & 4) ? "(flipped)" : "");
+        if (viewport->source.w != -1)
+          fprintf(log_fl, "\t     source: %dx%d+%d+%d\n",
+                  viewport->source.w, viewport->source.h,
+                  viewport->source.x, viewport->source.y);
+        fprintf(log_fl, "\t       type: %s\n", dest_type_str[viewport->type]);
+        if (viewport->type == DESTINATION_TYPE_RECT)
+          fprintf(log_fl, "\t  dest_rect: %dx%d+%d+%d\n",
+                  viewport->destination.rect.w, viewport->destination.rect.h,
+                  viewport->destination.rect.x, viewport->destination.rect.y);
+        else if (viewport->type == DESTINATION_TYPE_RATIO)
+          fprintf(log_fl, "\t dest_ratio: %.2fx%.2f+%.2f+%.2f\n",
+                  viewport->destination.ratio.w, viewport->destination.ratio.h,
+                  viewport->destination.ratio.x, viewport->destination.ratio.y);
+        else if (viewport->type == DESTINATION_TYPE_MODE)
+          {
+             fprintf(log_fl, "\t       mode: %s\n",
+                     mode_str[viewport->destination.mode.type]);
+             if (viewport->destination.mode.ratio_h != -1.0)
+               fprintf(log_fl, "\t\t    ratio: H(%.2f) V(%.2f)\n",
+                       viewport->destination.mode.ratio_h,
+                       viewport->destination.mode.ratio_v);
+             if (viewport->destination.mode.scale_h != -1.0)
+               fprintf(log_fl, "\t\t    scale: H(%.2f) V(%.2f)\n",
+                       viewport->destination.mode.scale_h,
+                       viewport->destination.mode.scale_v);
+             if (viewport->destination.mode.align_h != -1.0)
+               fprintf(log_fl, "\t\t    align: H(%.2f) V(%.2f)\n",
+                       viewport->destination.mode.align_h,
+                       viewport->destination.mode.align_v);
+             if (viewport->destination.mode.offset_w != 0 ||
+                 viewport->destination.mode.offset_h != 0 ||
+                 viewport->destination.mode.offset_x != 0 ||
+                 viewport->destination.mode.offset_y != 0)
+               fprintf(log_fl, "\t\t   offset: W(%d) H(%d) (%d) Y(%d)\n",
+                       viewport->destination.mode.offset_w, viewport->destination.mode.offset_h,
+                       viewport->destination.mode.offset_x, viewport->destination.mode.offset_y);
+          }
+
+        fprintf(log_fl, "\n");
+     }
+
+   fflush(log_fl);
+   fclose(log_fl);
+}
+
+
 int
 e_devicemgr_viewport_init(void)
 {
    if (!e_comp_wl) return 0;
    if (!e_comp_wl->wl.disp) return 0;
+
+   e_info_server_hook_set("viewport", _e_devicemgr_viewport_print, NULL);
 
    return 1;
 }
@@ -1487,4 +1582,5 @@ e_devicemgr_viewport_init(void)
 void
 e_devicemgr_viewport_fini(void)
 {
+   e_info_server_hook_set("viewport", NULL, NULL);
 }
