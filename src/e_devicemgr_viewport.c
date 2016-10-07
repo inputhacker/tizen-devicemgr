@@ -70,6 +70,7 @@ typedef struct _E_Viewport {
 static E_Viewport* _e_devicemgr_viewport_get_viewport(struct wl_resource *resource);
 static void _e_devicemgr_viewport_cb_resize(void *data, Evas *e, Evas_Object *obj, void *event_info);
 static void _e_devicemgr_viewport_cb_move(void *data, Evas *e, Evas_Object *obj, void *event_info);
+static void _e_devicemgr_viewport_cb_topmost_show(void *data, Evas *e, Evas_Object *obj, void *event_info);
 static void _e_devicemgr_viewport_cb_topmost_resize(void *data, Evas *e, Evas_Object *obj, void *event_info);
 static void _e_devicemgr_viewport_cb_topmost_move(void *data, Evas *e, Evas_Object *obj, void *event_info);
 
@@ -108,6 +109,8 @@ _destroy_viewport(E_Viewport *viewport)
                                        _e_devicemgr_viewport_cb_resize, viewport);
    evas_object_event_callback_del_full(viewport->ec->frame, EVAS_CALLBACK_MOVE,
                                        _e_devicemgr_viewport_cb_move, viewport);
+   evas_object_event_callback_del_full(viewport->topmost->frame, EVAS_CALLBACK_SHOW,
+                                       _e_devicemgr_viewport_cb_topmost_show, viewport);
    evas_object_event_callback_del_full(viewport->topmost->frame, EVAS_CALLBACK_RESIZE,
                                        _e_devicemgr_viewport_cb_topmost_resize, viewport);
    evas_object_event_callback_del_full(viewport->topmost->frame, EVAS_CALLBACK_MOVE,
@@ -1328,6 +1331,16 @@ _e_devicemgr_viewport_cb_move(void *data, Evas *e EINA_UNUSED, Evas_Object *obj 
 }
 
 static void
+_e_devicemgr_viewport_cb_topmost_show(void *data, Evas *e EINA_UNUSED, Evas_Object *obj EINA_UNUSED, void *event_info EINA_UNUSED)
+{
+   E_Viewport *viewport = data;
+
+   PDB("show start");
+   _e_devicemgr_viewport_apply(viewport->ec);
+   PDB("show end");
+}
+
+static void
 _e_devicemgr_viewport_cb_topmost_resize(void *data, Evas *e EINA_UNUSED, Evas_Object *obj EINA_UNUSED, void *event_info EINA_UNUSED)
 {
    E_Viewport *viewport = data;
@@ -1424,6 +1437,8 @@ e_devicemgr_viewport_create(struct wl_resource *resource,
    evas_object_event_callback_add(viewport->ec->frame, EVAS_CALLBACK_MOVE,
                                   _e_devicemgr_viewport_cb_move, viewport);
 
+   evas_object_event_callback_add(viewport->topmost->frame, EVAS_CALLBACK_SHOW,
+                                  _e_devicemgr_viewport_cb_topmost_show, viewport);
    evas_object_event_callback_add(viewport->topmost->frame, EVAS_CALLBACK_RESIZE,
                                   _e_devicemgr_viewport_cb_topmost_resize, viewport);
    evas_object_event_callback_add(viewport->topmost->frame, EVAS_CALLBACK_MOVE,
