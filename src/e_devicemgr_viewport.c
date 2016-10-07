@@ -1517,7 +1517,7 @@ _e_devicemgr_viewport_print(void *data, const char *log_path)
         if (!name)
           name = "NO NAME";
 
-        fprintf(log_fl, "* WinID: 0x%08x '%s'\n", win, name);
+        fprintf(log_fl, "* WinID: 0x%08"PRIxPTR" '%s'\n", win, name);
         if (viewport->transform > 0)
           fprintf(log_fl, "\t  transform: %d%s\n",
                   (4 - (viewport->transform & 3)) * 90 % 360,
