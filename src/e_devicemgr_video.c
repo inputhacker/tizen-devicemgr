@@ -77,6 +77,7 @@ struct _E_Video
 
    int output_align;
    int pp_align;
+   int pp_minw, pp_minh, pp_maxw, pp_maxh;
    int video_align;
 
    /* vblank handling */
@@ -1386,7 +1387,18 @@ _e_video_render(E_Video *video, const char *func)
         video->pp = tdm_display_create_pp(e_devmgr_dpy->tdm, NULL);
         EINA_SAFETY_ON_NULL_GOTO(video->pp, render_fail);
 
-        tdm_display_get_pp_available_size(e_devmgr_dpy->tdm, NULL, NULL, NULL, NULL, &video->pp_align);
+        tdm_display_get_pp_available_size(e_devmgr_dpy->tdm, &video->pp_minw, &video->pp_minh,
+                                          &video->pp_maxw, &video->pp_maxh, &video->pp_align);
+     }
+
+   if ((video->pp_minw > 0 && (video->geo.input_r.w < video->pp_minw || video->geo.output_r.w < video->pp_minw)) ||
+       (video->pp_minh > 0 && (video->geo.input_r.h < video->pp_minh || video->geo.output_r.h < video->pp_minh)) ||
+       (video->pp_maxw > 0 && (video->geo.input_r.w > video->pp_maxw || video->geo.output_r.w > video->pp_maxw)) ||
+       (video->pp_maxh > 0 && (video->geo.input_r.h > video->pp_maxh || video->geo.output_r.h > video->pp_maxh)))
+     {
+        INF("size(%dx%d, %dx%d) is out of PP range",
+            video->geo.input_r.w, video->geo.input_r.h, video->geo.output_r.w, video->geo.output_r.h);
+        goto done;
      }
 
    input_buffer = _e_video_input_buffer_get(video, comp_buffer, EINA_FALSE);
