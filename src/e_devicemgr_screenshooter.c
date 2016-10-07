@@ -515,7 +515,11 @@ _e_tz_screenmirror_buffer_free(E_Mirror_Buffer *buffer)
    /* then, dequeue and send dequeue event */
    _e_tz_screenmirror_buffer_dequeue(buffer);
 
-   wl_list_remove(&buffer->destroy_listener.link);
+   if (buffer->destroy_listener.notify)
+     {
+        wl_list_remove(&buffer->destroy_listener.link);
+        buffer->destroy_listener.notify = NULL;
+     }
 
    if (buffer->mbuf)
      {
@@ -531,6 +535,13 @@ _e_tz_screenmirror_buffer_free(E_Mirror_Buffer *buffer)
 static void
 _e_tz_screenmirror_buffer_cb_destroy(struct wl_listener *listener, void *data)
 {
+   E_Mirror_Buffer *buffer = container_of(listener, E_Mirror_Buffer, destroy_listener);
+
+   if (buffer->destroy_listener.notify)
+     {
+        wl_list_remove(&buffer->destroy_listener.link);
+        buffer->destroy_listener.notify = NULL;
+     }
 }
 
 static void
@@ -554,6 +565,10 @@ _e_tz_screenmirror_buffer_get(E_Mirror *mirror, struct wl_resource *resource)
    if (!(buffer = E_NEW(E_Mirror_Buffer, 1)))
       return NULL;
 
+   /* FIXME: this is very tricky. DON'T add istner after e_devmgr_buffer_create. */
+   buffer->destroy_listener.notify = _e_tz_screenmirror_buffer_cb_destroy;
+   wl_resource_add_destroy_listener(resource, &buffer->destroy_listener);
+
    buffer->mbuf = e_devmgr_buffer_create(resource);
    EINA_SAFETY_ON_NULL_GOTO(buffer->mbuf, fail_get);
 
@@ -564,9 +579,6 @@ _e_tz_screenmirror_buffer_get(E_Mirror *mirror, struct wl_resource *resource)
        buffer->mbuf->width, buffer->mbuf->height,
        buffer->mbuf->pitches[0], buffer->mbuf->pitches[1], buffer->mbuf->pitches[2],
        buffer->mbuf->offsets[0], buffer->mbuf->offsets[1], buffer->mbuf->offsets[2]);
-
-   buffer->destroy_listener.notify = _e_tz_screenmirror_buffer_cb_destroy;
-   wl_resource_add_destroy_listener(resource, &buffer->destroy_listener);
 
    e_devmgr_buffer_free_func_add(buffer->mbuf, _e_tz_screenmirror_buffer_cb_free, buffer);
 
