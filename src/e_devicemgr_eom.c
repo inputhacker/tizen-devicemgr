@@ -27,6 +27,7 @@
 #define EOMWR(msg, ARG...) WRN("[eom module][WRN] " msg, ##ARG)
 #define EOMIN(msg, ARG...) INF("[eom module][INF] " msg, ##ARG)
 #define EOMDB(msg, ARG...) DBG("[eom module][DBG] " msg, ##ARG)
+#define EOMDBG(msg, ARG...) ;
 
 #define EOM_NUM_ATTR 3
 #define EOM_CONNECT_CHECK_TIMEOUT 7.0
@@ -70,6 +71,10 @@ struct _E_Eom
    int height;
    char check_first_boot;
    Ecore_Timer *timer;
+
+   /* Rotation data */
+   int angle; /* 0, 90, 180, 270 */
+   Eina_Bool pending_rotate;
 };
 
 struct _E_Eom_Output
@@ -626,12 +631,81 @@ error:
    return EINA_FALSE;
 }
 
+static Eina_Bool
+_e_eom_pp_info_set(E_EomOutputPtr eom_output, tbm_surface_h src, tbm_surface_h dst)
+{
+   tdm_error err = TDM_ERROR_NONE;
+   tdm_info_pp pp_info;
+   int x = 0, y = 0, w = 0, h = 0;
+
+   if (g_eom->angle == 0 || g_eom->angle == 180)
+     {
+        _e_eom_util_calculate_fullsize(g_eom->width, g_eom->height,
+                                       eom_output->width, eom_output->height,
+                                       &x, &y, &w, &h);
+     }
+   else if (g_eom->angle == 90 || g_eom->angle == 270)
+     {
+        _e_eom_util_calculate_fullsize(g_eom->height, g_eom->width,
+                                       eom_output->width, eom_output->height,
+                                       &x, &y, &w, &h);
+     }
+
+   EOMDB("PP: src:%dx%d, dst:%dx%d", g_eom->width, g_eom->height,
+          eom_output->width, eom_output->height);
+   EOMDB("PP calculation: x:%d, y:%d, w:%d, h:%d", x, y, w, h);
+
+   pp_info.src_config.size.h = g_eom->width;
+   pp_info.src_config.size.v = g_eom->height;
+   pp_info.src_config.pos.x = 0;
+   pp_info.src_config.pos.y = 0;
+   pp_info.src_config.pos.w = g_eom->width;
+   pp_info.src_config.pos.h = g_eom->height;
+   pp_info.src_config.format = TBM_FORMAT_ARGB8888;
+
+   pp_info.dst_config.size.h = eom_output->width;
+   pp_info.dst_config.size.v = eom_output->height;
+   pp_info.dst_config.pos.x = x;
+   pp_info.dst_config.pos.y = y;
+   pp_info.dst_config.pos.w = w;
+   pp_info.dst_config.pos.h = h;
+   pp_info.dst_config.format = TBM_FORMAT_ARGB8888;
+
+   switch (g_eom->angle)
+     {
+      case 0:
+         pp_info.transform = TDM_TRANSFORM_NORMAL;
+         break;
+      case 90:
+         pp_info.transform = TDM_TRANSFORM_90;
+         break;
+      case 180:
+         pp_info.transform = TDM_TRANSFORM_180;
+         break;
+      case 270:
+          pp_info.transform = TDM_TRANSFORM_270;
+         break;
+      default:
+        EOMDB("Never get here");
+        break;
+     }
+
+   pp_info.sync = 0;
+   pp_info.flags = 0;
+
+   err = tdm_pp_set_info(eom_output->pp, &pp_info);
+   EINA_SAFETY_ON_FALSE_RETURN_VAL(err == TDM_ERROR_NONE, EINA_FALSE);
+
+   return EINA_TRUE;
+}
+
 static void
-_e_eom_pp_run(E_EomOutputPtr eom_output)
+_e_eom_pp_run(E_EomOutputPtr eom_output, Eina_Bool first_run)
 {
    tdm_error tdm_err = TDM_ERROR_NONE;
    tbm_surface_h dst_surface = NULL;
    tbm_surface_h src_surface = NULL;
+   Eina_Bool ret = EINA_FALSE;
 
    if (g_eom->main_output_state == 0)
      return;
@@ -653,6 +727,16 @@ _e_eom_pp_run(E_EomOutputPtr eom_output)
         src_surface = _e_eom_util_get_output_surface(g_eom->main_output_name);
         tdm_err = TDM_ERROR_OPERATION_FAILED;
         EINA_SAFETY_ON_NULL_GOTO(src_surface, error);
+
+        /* Is set to TRUE if device has been recently rotated */
+        if (g_eom->pending_rotate || first_run)
+          {
+             EOMDB("NEED ROTATE->%d", g_eom->angle);
+             g_eom->pending_rotate = EINA_FALSE;
+
+             ret = _e_eom_pp_info_set(eom_output, src_surface, dst_surface);
+             EINA_SAFETY_ON_FALSE_GOTO(ret == EINA_TRUE, error);
+          }
 
         tdm_err = tdm_buffer_add_release_handler(dst_surface, _e_eom_cb_pp, eom_output);
         EINA_SAFETY_ON_FALSE_GOTO(tdm_err == TDM_ERROR_NONE, error);
@@ -753,7 +837,7 @@ _e_eom_cb_pp(tbm_surface_h surface, void *user_data)
         tbm_surface_queue_release(eom_output->pp_queue, surface);
      }
 
-   _e_eom_pp_run(eom_output);
+   _e_eom_pp_run(eom_output, EINA_FALSE);
 
    EOMDB("==============================<  PP");
 }
@@ -768,16 +852,14 @@ _e_eom_cb_dequeuable(tbm_surface_queue_h queue, void *user_data)
 
    tbm_surface_queue_remove_dequeuable_cb(eom_output->pp_queue, _e_eom_cb_dequeuable, eom_output);
 
-   _e_eom_pp_run(eom_output);
+   _e_eom_pp_run(eom_output, EINA_FALSE);
 }
 
 static Eina_Bool
 _e_eom_pp_init(E_EomOutputPtr eom_output)
 {
    tdm_error err = TDM_ERROR_NONE;
-   tdm_info_pp pp_info;
    tdm_pp *pp = NULL;
-   int x, y, w, h;
 
    if (eom_output->pp == NULL)
      {
@@ -790,40 +872,9 @@ _e_eom_pp_init(E_EomOutputPtr eom_output)
         EINA_SAFETY_ON_FALSE_RETURN_VAL(err == TDM_ERROR_NONE, EINA_FALSE);
 
         eom_output->pp = pp;
-
-        /* TODO : consider rotation */
-        _e_eom_util_calculate_fullsize(g_eom->width, g_eom->height,
-                                       eom_output->width, eom_output->height,
-                                       &x, &y, &w, &h);
-
-        EOMDB("PP calculation: x:%d, y:%d, w:%d, h:%d", x, y, w, h);
-
-        pp_info.src_config.size.h = g_eom->width;
-        pp_info.src_config.size.v = g_eom->height;
-        pp_info.src_config.pos.x = 0;
-        pp_info.src_config.pos.y = 0;
-        pp_info.src_config.pos.w = g_eom->width;
-        pp_info.src_config.pos.h = g_eom->height;
-        pp_info.src_config.format = TBM_FORMAT_ARGB8888;
-
-        pp_info.dst_config.size.h = eom_output->width;
-        pp_info.dst_config.size.v = eom_output->height;
-        pp_info.dst_config.pos.x = x;
-        pp_info.dst_config.pos.y = y;
-        pp_info.dst_config.pos.w = w;
-        pp_info.dst_config.pos.h = h;
-        pp_info.dst_config.format = TBM_FORMAT_ARGB8888;
-
-        /* TO DO : get rotation */
-        pp_info.transform = TDM_TRANSFORM_NORMAL;
-        pp_info.sync = 0;
-        pp_info.flags = 0;
-
-        err = tdm_pp_set_info(pp, &pp_info);
-        EINA_SAFETY_ON_FALSE_RETURN_VAL(err == TDM_ERROR_NONE, EINA_FALSE);
      }
 
-   _e_eom_pp_run(eom_output);
+   _e_eom_pp_run(eom_output, EINA_TRUE);
 
    return EINA_TRUE;
 }
@@ -1977,6 +2028,7 @@ _e_eom_cb_ecore_drm_activate(void *data EINA_UNUSED, int type EINA_UNUSED, void 
      return ECORE_CALLBACK_PASS_ON;
 
    e = event;
+   (void) e;
 
    EOMDB("e->active:%d", e->active);
 
@@ -2226,6 +2278,47 @@ _e_eom_cb_client_buffer_change(void *data, int type, void *event)
 }
 
 static Eina_Bool
+_e_eom_cb_rotation_end(void *data, int evtype EINA_UNUSED, void *event)
+{
+   E_EomPtr eom;
+   E_Event_Client *ev;
+   E_Client *ec = NULL;
+
+   EINA_SAFETY_ON_NULL_RETURN_VAL(data, ECORE_CALLBACK_PASS_ON);
+   EINA_SAFETY_ON_NULL_RETURN_VAL(event, ECORE_CALLBACK_PASS_ON);
+
+   ev = event;
+   eom = data;
+   ec = ev->ec;
+
+   EINA_SAFETY_ON_NULL_RETURN_VAL(ec, ECORE_CALLBACK_PASS_ON);
+
+   /* As I understand E sends rotate events to all visible apps, thus EOM's
+    * "_e_eom_cb_rotation_end" will be called for each visible E_Client.
+    * Therefore we are interested only in the first change of angle, other
+    * events with the same angle value will be ignored. */
+   if (eom->angle == ec->e.state.rot.ang.curr)
+     return ECORE_CALLBACK_PASS_ON;
+
+   eom->angle = ec->e.state.rot.ang.curr;
+   eom->pending_rotate = EINA_TRUE;
+
+   EOMDB("-----------------------------------------------------");
+   EOMDB("END: ec:%p", ec);
+
+   EOMDB("END: angles: prev:%d  curr:%d  next:%d  res:%d",
+          ec->e.state.rot.ang.prev, ec->e.state.rot.ang.curr,
+          ec->e.state.rot.ang.next, ec->e.state.rot.ang.reserve);
+
+   EOMDB("END: rotate angle:%d", eom->angle);
+   EOMDB("END: ec:%dx%d", ec->w, ec->h);
+
+   EOMDB("-----------------------------------------------------");
+
+   return ECORE_CALLBACK_PASS_ON;
+}
+
+static Eina_Bool
 _e_eom_init()
 {
    Eina_Bool ret = EINA_FALSE;
@@ -2241,7 +2334,13 @@ _e_eom_init()
    id = wl_display_get_serial(e_comp_wl->wl.disp);
    EOMDB("eom name: %d", id);
 
+   (void)id;
+
    EINA_SAFETY_ON_NULL_GOTO(g_eom->global, err);
+
+   g_eom->angle = 0;
+   g_eom->pending_rotate = 0;
+   g_eom->main_output_name = NULL;
 
    ret = _e_eom_init_internal();
    EINA_SAFETY_ON_FALSE_GOTO(ret == EINA_TRUE, err);
@@ -2249,8 +2348,8 @@ _e_eom_init()
    E_LIST_HANDLER_APPEND(g_eom->handlers, ECORE_DRM_EVENT_ACTIVATE, _e_eom_cb_ecore_drm_activate, g_eom);
    E_LIST_HANDLER_APPEND(g_eom->handlers, ECORE_DRM_EVENT_OUTPUT, _e_eom_cb_ecore_drm_output, g_eom);
    E_LIST_HANDLER_APPEND(g_eom->handlers, E_EVENT_CLIENT_BUFFER_CHANGE, _e_eom_cb_client_buffer_change, NULL);
-
-   g_eom->main_output_name = NULL;
+   /* TODO: add if def _F_ZONE_WINDOW_ROTATION_ */
+   E_LIST_HANDLER_APPEND(g_eom->handlers, E_EVENT_CLIENT_ROTATION_CHANGE_END, _e_eom_cb_rotation_end, g_eom);
 
    return EINA_TRUE;
 
