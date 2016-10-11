@@ -836,7 +836,10 @@ _e_video_frame_buffer_destroy(E_Video_Fb *vfb)
    if (!vfb) return;
 
    if (vfb->mbuf)
-     e_devmgr_buffer_unref(vfb->mbuf);
+     {
+        vfb->mbuf->in_use = EINA_FALSE;
+        e_devmgr_buffer_unref(vfb->mbuf);
+     }
 
    e_comp_wl_buffer_reference(&vfb->buffer_ref, NULL);
    free (vfb);
@@ -886,6 +889,9 @@ _e_video_frame_buffer_show(E_Video *video, E_Video_Fb *vfb)
 
    if (!vfb)
      {
+        if (video->current_fb && video->current_fb->mbuf)
+          video->current_fb->mbuf->in_use = EINA_FALSE;
+
         tdm_layer_unset_buffer(video->layer);
         tdm_output_commit(video->output, 0, NULL, NULL);
         return EINA_TRUE;
@@ -1447,7 +1453,10 @@ _e_video_render(E_Video *video, const char *func)
    pp_buffer->in_use = EINA_TRUE;
 
    if (tdm_pp_commit(video->pp))
-     goto render_fail;
+     {
+       pp_buffer->in_use = EINA_FALSE;
+       goto render_fail;
+     }
 
    video->old_geo = video->geo;
    video->old_comp_buffer = comp_buffer;
