@@ -638,6 +638,8 @@ _e_eom_pp_info_set(E_EomOutputPtr eom_output, tbm_surface_h src, tbm_surface_h d
    tdm_info_pp pp_info;
    int x = 0, y = 0, w = 0, h = 0;
 
+   memset(&pp_info, 0, sizeof(tdm_info_pp));
+
    if (g_eom->angle == 0 || g_eom->angle == 180)
      {
         _e_eom_util_calculate_fullsize(g_eom->width, g_eom->height,
@@ -651,6 +653,7 @@ _e_eom_pp_info_set(E_EomOutputPtr eom_output, tbm_surface_h src, tbm_surface_h d
                                        &x, &y, &w, &h);
      }
 
+   EOMDB("PP: angle:%d", g_eom->angle);
    EOMDB("PP: src:%dx%d, dst:%dx%d", g_eom->width, g_eom->height,
           eom_output->width, eom_output->height);
    EOMDB("PP calculation: x:%d, y:%d, w:%d, h:%d", x, y, w, h);
@@ -699,6 +702,47 @@ _e_eom_pp_info_set(E_EomOutputPtr eom_output, tbm_surface_h src, tbm_surface_h d
    return EINA_TRUE;
 }
 
+void _e_eom_clear_surfaces(E_EomOutputPtr eom_output, tbm_surface_queue_h queue)
+{
+   int num, pitch;
+   int i = 0;
+   tbm_bo bo;
+   tbm_bo_handle hndl;
+   tbm_surface_h surface[3];
+   tbm_surface_queue_error_e err = TBM_SURFACE_QUEUE_ERROR_NONE;
+
+   err = tbm_surface_queue_get_surfaces(queue, surface, &num);
+   if (err != TBM_SURFACE_QUEUE_ERROR_NONE)
+   {
+       EOMDB("get surfaces");
+       return;
+   }
+
+   for (i = 0; i < num; i++)
+     {
+        /* XXX: should be cleared all the bos of the surface? */
+        bo = tbm_surface_internal_get_bo(surface[i], 0);
+        if (!bo)
+          {
+             EOMDB("bo get error");
+             return;
+          }
+
+        hndl = tbm_bo_map(bo, TBM_DEVICE_CPU, TBM_OPTION_READ | TBM_OPTION_WRITE);
+        if (!hndl.ptr)
+          {
+             EOMDB("handle get error");
+             return;
+          }
+
+        /* TODO: take correct picth */
+        pitch = eom_output->width * 4;
+        memset(hndl.ptr, 0x00, pitch*eom_output->height);
+
+        tbm_bo_unmap(bo);
+     }
+}
+
 static void
 _e_eom_pp_run(E_EomOutputPtr eom_output, Eina_Bool first_run)
 {
@@ -731,8 +775,10 @@ _e_eom_pp_run(E_EomOutputPtr eom_output, Eina_Bool first_run)
         /* Is set to TRUE if device has been recently rotated */
         if (g_eom->pending_rotate || first_run)
           {
-             EOMDB("NEED ROTATE->%d", g_eom->angle);
              g_eom->pending_rotate = EINA_FALSE;
+
+             /* TODO: it has to be implemented in better way */
+             _e_eom_clear_surfaces(eom_output, eom_output->pp_queue);
 
              ret = _e_eom_pp_info_set(eom_output, src_surface, dst_surface);
              EINA_SAFETY_ON_FALSE_GOTO(ret == EINA_TRUE, error);
@@ -2280,9 +2326,9 @@ _e_eom_cb_client_buffer_change(void *data, int type, void *event)
 static Eina_Bool
 _e_eom_cb_rotation_end(void *data, int evtype EINA_UNUSED, void *event)
 {
-   E_EomPtr eom;
-   E_Event_Client *ev;
    E_Client *ec = NULL;
+   E_Event_Client *ev = NULL;
+   E_EomPtr eom = NULL;
 
    EINA_SAFETY_ON_NULL_RETURN_VAL(data, ECORE_CALLBACK_PASS_ON);
    EINA_SAFETY_ON_NULL_RETURN_VAL(event, ECORE_CALLBACK_PASS_ON);
@@ -2339,7 +2385,7 @@ _e_eom_init()
    EINA_SAFETY_ON_NULL_GOTO(g_eom->global, err);
 
    g_eom->angle = 0;
-   g_eom->pending_rotate = 0;
+   g_eom->pending_rotate = EINA_FALSE;
    g_eom->main_output_name = NULL;
 
    ret = _e_eom_init_internal();
