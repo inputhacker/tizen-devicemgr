@@ -2368,7 +2368,6 @@ static Eina_Bool
 _e_eom_init()
 {
    Eina_Bool ret = EINA_FALSE;
-   uint32_t id = 0;
 
    EINA_SAFETY_ON_NULL_GOTO(e_comp_wl, err);
 
@@ -2376,12 +2375,6 @@ _e_eom_init()
    EINA_SAFETY_ON_NULL_RETURN_VAL(g_eom, EINA_FALSE);
 
    g_eom->global = wl_global_create(e_comp_wl->wl.disp, &wl_eom_interface, 1, g_eom, _e_eom_cb_wl_bind);
-
-   id = wl_display_get_serial(e_comp_wl->wl.disp);
-   EOMDB("eom name: %d", id);
-
-   (void)id;
-
    EINA_SAFETY_ON_NULL_GOTO(g_eom->global, err);
 
    g_eom->angle = 0;
