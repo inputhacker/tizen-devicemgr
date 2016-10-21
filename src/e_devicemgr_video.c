@@ -93,8 +93,6 @@ static Eina_List *video_list;
 static void _e_video_set(E_Video *video, E_Client *ec);
 static void _e_video_destroy(E_Video *video);
 static void _e_video_render(E_Video *video, const char *func);
-static void _e_video_show(E_Video *video, const char *func);
-static void _e_video_hide(E_Video *video, const char *func);
 static Eina_Bool _e_video_frame_buffer_show(E_Video *video, E_Video_Fb *vfb);
 static void _e_video_frame_buffer_destroy(E_Video_Fb *vfb);
 static void _e_video_buffer_show(E_Video *video, E_Devmgr_Buf *mbuf, Eina_Rectangle *visible, unsigned int transform);
@@ -1036,22 +1034,6 @@ _e_video_cb_evas_move(void *data, Evas *e EINA_UNUSED, Evas_Object *obj EINA_UNU
      _e_video_render(video, __FUNCTION__);
 }
 
-static void
-_e_video_cb_evas_show(void *data, Evas *e EINA_UNUSED, Evas_Object *obj EINA_UNUSED, void *event_info EINA_UNUSED)
-{
-   E_Video *video = data;
-
-   _e_video_show(video, __FUNCTION__);
-}
-
-static void
-_e_video_cb_evas_hide(void *data, Evas *e EINA_UNUSED, Evas_Object *obj EINA_UNUSED, void *event_info EINA_UNUSED)
-{
-   E_Video *video = data;
-
-   _e_video_hide(video, __FUNCTION__);
-}
-
 static E_Video*
 _e_video_create(struct wl_resource *video_object, struct wl_resource *surface)
 {
@@ -1189,27 +1171,6 @@ _e_video_set(E_Video *video, E_Client *ec)
 }
 
 static void
-_e_video_hide(E_Video *video, const char *func)
-{
-   EINA_SAFETY_ON_NULL_RETURN(video);
-
-   _e_video_frame_buffer_show(video, NULL);
-
-   VDB("hide (%s)", func);
-}
-
-static void
-_e_video_show(E_Video *video, const char *func)
-{
-   EINA_SAFETY_ON_NULL_RETURN(video);
-
-   if (video->current_fb)
-     _e_video_frame_buffer_show(video, video->current_fb);
-
-   VDB("show (%s)", func);
-}
-
-static void
 _e_video_destroy(E_Video *video)
 {
    E_Devmgr_Buf *mbuf;
@@ -1225,10 +1186,6 @@ _e_video_destroy(E_Video *video)
                                             _e_video_cb_evas_resize, video);
         evas_object_event_callback_del_full(video->ec->frame, EVAS_CALLBACK_MOVE,
                                             _e_video_cb_evas_move, video);
-        evas_object_event_callback_del_full(video->ec->frame, EVAS_CALLBACK_HIDE,
-                                            _e_video_cb_evas_hide, video);
-        evas_object_event_callback_del_full(video->ec->frame, EVAS_CALLBACK_SHOW,
-                                            _e_video_cb_evas_show, video);
      }
 
    wl_resource_set_destructor(video->video_object, NULL);
@@ -1262,7 +1219,7 @@ _e_video_destroy(E_Video *video)
 
    video_list = eina_list_remove(video_list, video);
 
-   VIN("destroy");
+   VIN("stop");
 
    free(video);
 
@@ -1517,10 +1474,6 @@ done:
                                        _e_video_cb_evas_resize, video);
         evas_object_event_callback_add(video->ec->frame, EVAS_CALLBACK_MOVE,
                                        _e_video_cb_evas_move, video);
-        evas_object_event_callback_add(video->ec->frame, EVAS_CALLBACK_HIDE,
-                                       _e_video_cb_evas_hide, video);
-        evas_object_event_callback_add(video->ec->frame, EVAS_CALLBACK_SHOW,
-                                       _e_video_cb_evas_show, video);
         video->cb_registered = EINA_TRUE;
      }
    DBG("======================================.");
@@ -1619,21 +1572,25 @@ static Eina_Bool
 _e_video_cb_ec_hide(void *data, int type, void *event)
 {
    E_Event_Client *ev = event;
-   E_Client *ec;
+   E_Client *ec, *topmost;
    E_Video *video;
 
    EINA_SAFETY_ON_NULL_RETURN_VAL(ev, ECORE_CALLBACK_PASS_ON);
    EINA_SAFETY_ON_NULL_RETURN_VAL(ev->ec, ECORE_CALLBACK_PASS_ON);
 
    ec = ev->ec;
-   EINA_SAFETY_ON_TRUE_RETURN_VAL(e_object_is_del(E_OBJECT(ec)), ECORE_CALLBACK_PASS_ON);
-
    if (!ec->comp_data) return ECORE_CALLBACK_PASS_ON;
 
    video = find_video_with_surface(ec->comp_data->surface);
    if (!video) return ECORE_CALLBACK_PASS_ON;
 
-   _e_video_hide(video, __FUNCTION__);
+   topmost = find_topmost_parent_get(ec);
+   if (!topmost) return ECORE_CALLBACK_PASS_ON;
+
+   /* if topmost parent is visible, we don't hide previous video frame. */
+   if (topmost->visible) return ECORE_CALLBACK_PASS_ON;
+
+   _e_video_frame_buffer_show(video, NULL);
 
    VIN("hide");
 
