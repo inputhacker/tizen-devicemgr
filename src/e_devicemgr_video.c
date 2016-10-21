@@ -22,11 +22,11 @@ static int _video_detail_log_dom = -1;
 #define DET(...)          EINA_LOG_DOM_DBG(_video_detail_log_dom, __VA_ARGS__)
 #define VDT(fmt,arg...)   DET("window(0x%08"PRIxPTR"): "fmt, video->window, ##arg)
 
-#define GEO_FMT   "%d,%d (%d,%d %dx%d) ~ (%d,%d %dx%d) tran(%d)"
+#define GEO_FMT   "%dx%d(%dx%d+%d+%d) -> (%dx%d+%d+%d) transform(%d)"
 #define GEO_ARG(g) \
    (g)->input_w, (g)->input_h, \
-   (g)->input_r.x, (g)->input_r.y, (g)->input_r.w, (g)->input_r.h, \
-   (g)->output_r.x, (g)->output_r.y, (g)->output_r.w, (g)->output_r.h, \
+   (g)->input_r.w, (g)->input_r.h, (g)->input_r.x, (g)->input_r.y, \
+   (g)->output_r.w, (g)->output_r.h, (g)->output_r.x, (g)->output_r.y, \
    (g)->transform
 
 typedef struct _E_Video_Fb
@@ -203,10 +203,10 @@ _e_video_input_buffer_cb_free(E_Devmgr_Buf *mbuf, void *data)
    /* if current fb is destroyed */
    if (video->current_fb && video->current_fb->mbuf == mbuf)
      {
+        VIN("current fb destroyed");
         _e_video_frame_buffer_show(video, NULL);
         _e_video_frame_buffer_destroy(video->current_fb);
         video->current_fb = NULL;
-        VDB("current fb destroyed");
         return;
      }
 
@@ -494,11 +494,13 @@ _e_video_geometry_cal_viewport(E_Video *video)
         y2 = wl_fixed_to_int(vp->buffer.src_y + vp->buffer.src_height);
      }
 
+#if 0
    VDB("transform(%d) scale(%d) buffer(%dx%d) src(%d,%d %d,%d) viewport(%dx%d)",
        vp->buffer.transform, vp->buffer.scale,
        width_from_buffer, height_from_buffer,
        x1, y1, x2 - x1, y2 - y1,
        ec->comp_data->width_from_viewport, ec->comp_data->height_from_viewport);
+#endif
 
    buffer_transform(width_from_buffer, height_from_buffer,
                     vp->buffer.transform, vp->buffer.scale, x1, y1, &tx1, &ty1);
@@ -570,11 +572,13 @@ _e_video_geometry_cal_viewport(E_Video *video)
      break;
    }
 
+#if 0
    VDB("geometry(%dx%d  %d,%d %dx%d  %d,%d %dx%d  %d)",
        video->geo.input_w, video->geo.input_h,
        EINA_RECTANGLE_ARGS(&video->geo.input_r),
        EINA_RECTANGLE_ARGS(&video->geo.output_r),
        video->geo.transform);
+#endif
 
    return EINA_TRUE;
 }
@@ -810,7 +814,6 @@ _e_video_format_info_get(E_Video *video)
    EINA_SAFETY_ON_NULL_RETURN(tbm_surf);
 
    video->tbmfmt = tbm_surface_get_format(tbm_surf);
-   VDB("video format: %c%c%c%c", FOURCC_STR(video->tbmfmt));
 }
 
 static E_Video_Fb*
@@ -892,6 +895,7 @@ _e_video_frame_buffer_show(E_Video *video, E_Video_Fb *vfb)
         if (video->current_fb && video->current_fb->mbuf)
           video->current_fb->mbuf->in_use = EINA_FALSE;
 
+        VIN("stop video: hide");
         tdm_layer_unset_buffer(video->layer);
         tdm_output_commit(video->output, 0, NULL, NULL);
         return EINA_TRUE;
@@ -972,6 +976,7 @@ _e_video_frame_buffer_show(E_Video *video, E_Video_Fb *vfb)
 
    return EINA_TRUE;
 show_fail:
+   VIN("stop video: show failed");
    tdm_layer_unset_buffer(video->layer);
    tdm_output_commit(video->output, 0, NULL, NULL);
    return EINA_FALSE;
@@ -1166,8 +1171,6 @@ _e_video_set(E_Video *video, E_Client *ec)
         tdm_layer_get_property(video->layer, props[i].id, &value);
         tizen_video_object_send_attribute(video->video_object, props[i].name, value.u32);
      }
-
-   VIN("prepare. wl_surface@%d", wl_resource_get_id(video->surface));
 }
 
 static void
@@ -1179,6 +1182,8 @@ _e_video_destroy(E_Video *video)
 
    if (!video)
       return;
+
+   VIN("destroy");
 
    if (video->cb_registered)
      {
@@ -1219,8 +1224,6 @@ _e_video_destroy(E_Video *video)
 
    video_list = eina_list_remove(video_list, video);
 
-   VIN("stop");
-
    free(video);
 
 #if 0
@@ -1246,14 +1249,12 @@ _e_video_check_if_pp_needed(E_Video *video)
    /* check formats */
    tdm_layer_get_available_formats(video->layer, &formats, &count);
    for (i = 0; i < count; i++)
-   {
-      VDB("layer format: %c%c%c%c", FOURCC_STR(formats[i]));
-      if (formats[i] == video->tbmfmt)
-        {
-           found = EINA_TRUE;
-           break;
-        }
-   }
+     if (formats[i] == video->tbmfmt)
+       {
+          found = EINA_TRUE;
+          break;
+       }
+
    if (!found)
      {
         video->pp_tbmfmt = TBM_FORMAT_ARGB8888;
@@ -1345,7 +1346,10 @@ _e_video_render(E_Video *video, const char *func)
    if (!comp_buffer)
      {
         if (video->layer)
-          _e_video_frame_buffer_show(video, NULL);
+          {
+             VIN("no comp_buffer");
+             _e_video_frame_buffer_show(video, NULL);
+          }
         return;
      }
 
@@ -1362,10 +1366,9 @@ _e_video_render(E_Video *video, const char *func)
        video->old_comp_buffer == comp_buffer)
      return;
 
-   DBG("====================================== %s", func);
-   VDB("old["GEO_FMT" buf(%p)] new["GEO_FMT" buf(%p)]",
-       GEO_ARG(&video->old_geo), video->old_comp_buffer,
-       GEO_ARG(&video->geo), comp_buffer);
+   DBG("====================================== (%s)", func);
+   VDB("old: "GEO_FMT" buf(%p)", GEO_ARG(&video->old_geo), video->old_comp_buffer);
+   VDB("new: "GEO_FMT" buf(%p) %c%c%c%c", GEO_ARG(&video->geo), comp_buffer, FOURCC_STR(video->tbmfmt));
 
    _e_video_input_buffer_valid(video, comp_buffer);
 
@@ -1528,26 +1531,6 @@ _e_video_cb_ec_buffer_change(void *data, int type, void *event)
 }
 
 static Eina_Bool
-_e_video_cb_ec_add(void *data, int type, void *event)
-{
-   E_Event_Client *ev = event;
-   E_Client *ec;
-   E_Video *video;
-
-   EINA_SAFETY_ON_NULL_RETURN_VAL(ev, ECORE_CALLBACK_PASS_ON);
-   EINA_SAFETY_ON_NULL_RETURN_VAL(ev->ec, ECORE_CALLBACK_PASS_ON);
-
-   ec = ev->ec;
-   if (!ec->comp_data) return ECORE_CALLBACK_PASS_ON;
-
-   video = find_video_with_surface(ec->comp_data->surface);
-   if (video)
-      _e_video_set(video, ec);
-
-   return ECORE_CALLBACK_PASS_ON;
-}
-
-static Eina_Bool
 _e_video_cb_ec_remove(void *data, int type, void *event)
 {
    E_Event_Client *ev = event;
@@ -1590,9 +1573,9 @@ _e_video_cb_ec_hide(void *data, int type, void *event)
    /* if topmost parent is visible, we don't hide previous video frame. */
    if (topmost->visible) return ECORE_CALLBACK_PASS_ON;
 
-   _e_video_frame_buffer_show(video, NULL);
-
    VIN("hide");
+
+   _e_video_frame_buffer_show(video, NULL);
 
    return ECORE_CALLBACK_PASS_ON;
 }
@@ -1651,6 +1634,8 @@ _e_devicemgr_video_object_cb_set_attribute(struct wl_client *client,
              tdm_value v;
              v.u32 = value;
              tdm_layer_set_property(video->layer, props[i].id, v);
+             if (props[i].id == video->tdm_mute_id)
+               VDB("property(%s) value(%d)", name, value);
              return;
           }
      }
@@ -1810,8 +1795,6 @@ e_devicemgr_video_init(void)
 
    E_LIST_HANDLER_APPEND(video_hdlrs, E_EVENT_CLIENT_BUFFER_CHANGE,
                          _e_video_cb_ec_buffer_change, NULL);
-   E_LIST_HANDLER_APPEND(video_hdlrs, E_EVENT_CLIENT_ADD,
-                         _e_video_cb_ec_add, NULL);
    E_LIST_HANDLER_APPEND(video_hdlrs, E_EVENT_CLIENT_REMOVE,
                          _e_video_cb_ec_remove, NULL);
    E_LIST_HANDLER_APPEND(video_hdlrs, E_EVENT_CLIENT_HIDE,
