@@ -77,6 +77,9 @@ typedef struct _E_Viewport {
          double align_v;
       } mode;
    } destination;
+
+   Eina_Bool query_parent_size;
+   Eina_Rectangle parent_size;
 } E_Viewport;
 
 static E_Viewport* _e_devicemgr_viewport_get_viewport(struct wl_resource *resource);
@@ -85,6 +88,7 @@ static void _e_devicemgr_viewport_cb_move(void *data, Evas *e, Evas_Object *obj,
 static void _e_devicemgr_viewport_cb_topmost_show(void *data, Evas *e, Evas_Object *obj, void *event_info);
 static void _e_devicemgr_viewport_cb_topmost_resize(void *data, Evas *e, Evas_Object *obj, void *event_info);
 static void _e_devicemgr_viewport_cb_topmost_move(void *data, Evas *e, Evas_Object *obj, void *event_info);
+static void _e_devicemgr_viewport_cb_parent_resize(void *data, Evas *e, Evas_Object *obj, void *event_info);
 
 static E_Client*
 _topmost_parent_get(E_Client *ec)
@@ -116,6 +120,10 @@ _destroy_viewport(E_Viewport *viewport)
    ec = viewport->ec;
 
    ecore_event_handler_del(viewport->topmost_rotate_hdl);
+
+   if (viewport->query_parent_size)
+     evas_object_event_callback_del_full(viewport->epc->frame, EVAS_CALLBACK_RESIZE,
+                                         _e_devicemgr_viewport_cb_parent_resize, viewport);
 
    evas_object_event_callback_del_full(viewport->ec->frame, EVAS_CALLBACK_RESIZE,
                                        _e_devicemgr_viewport_cb_resize, viewport);
@@ -397,6 +405,27 @@ static const struct tizen_destination_mode_interface _e_devicemgr_destination_mo
 };
 
 static void
+_e_devicemgr_viewport_cb_parent_resize(void *data, Evas *e EINA_UNUSED, Evas_Object *obj EINA_UNUSED, void *event_info EINA_UNUSED)
+{
+   E_Viewport *viewport = data;
+   Evas_Coord old_w, old_h;
+
+   if (e_object_is_del(E_OBJECT(viewport->epc))) return;
+
+   old_w = viewport->parent_size.w;
+   old_h = viewport->parent_size.h;
+
+   evas_object_geometry_get(viewport->epc->frame,
+                            &viewport->parent_size.x, &viewport->parent_size.y,
+                            &viewport->parent_size.w, &viewport->parent_size.h);
+
+   if (old_w != viewport->parent_size.w || old_h != viewport->parent_size.h)
+      tizen_viewport_send_parent_size(viewport->resource,
+                                      viewport->parent_size.w,
+                                      viewport->parent_size.h);
+}
+
+static void
 _e_devicemgr_viewport_destroy(struct wl_resource *resource)
 {
    E_Viewport *viewport = _e_devicemgr_viewport_get_viewport(resource);
@@ -587,6 +616,43 @@ _e_devicemgr_viewport_cb_get_destination_mode(struct wl_client *client,
 
 }
 
+static void
+_e_devicemgr_viewport_cb_query_parent_size(struct wl_client *client,
+                                           struct wl_resource *resource)
+{
+   E_Viewport *viewport = _e_devicemgr_viewport_get_viewport(resource);
+   Evas_Coord w = 0, h = 0;
+
+   if (viewport->epc)
+     {
+        evas_object_geometry_get(viewport->epc->frame,
+                                 &viewport->parent_size.x, &viewport->parent_size.y,
+                                 &viewport->parent_size.w, &viewport->parent_size.h);
+        w = viewport->parent_size.w;
+        h = viewport->parent_size.h;
+
+        if (!viewport->query_parent_size)
+          {
+             viewport->query_parent_size = EINA_TRUE;
+             evas_object_event_callback_add(viewport->epc->frame, EVAS_CALLBACK_RESIZE,
+                                            _e_devicemgr_viewport_cb_parent_resize, viewport);
+          }
+     }
+   else
+     {
+        E_Zone *zone = e_comp_zone_xy_get(viewport->ec->x, viewport->ec->y);
+        if (zone)
+          {
+             w = zone->w;
+             h = zone->h;
+          }
+        else
+          PWR("out of zone");
+     }
+
+   tizen_viewport_send_parent_size(resource, w, h);
+}
+
 static const struct tizen_viewport_interface _e_devicemgr_viewport_interface =
 {
    _e_devicemgr_viewport_cb_destroy,
@@ -595,6 +661,7 @@ static const struct tizen_viewport_interface _e_devicemgr_viewport_interface =
    _e_devicemgr_viewport_cb_set_destination,
    _e_devicemgr_viewport_cb_set_destination_ratio,
    _e_devicemgr_viewport_cb_get_destination_mode,
+   _e_devicemgr_viewport_cb_query_parent_size,
 };
 
 static void
