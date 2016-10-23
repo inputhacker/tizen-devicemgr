@@ -85,6 +85,9 @@ struct _E_Video
    Eina_List  *waiting_list;
    E_Video_Fb *current_fb;
 
+   /* attributes */
+   int tdm_mute_id;
+
    Eina_Bool  cb_registered;
 };
 
@@ -1039,6 +1042,53 @@ _e_video_cb_evas_move(void *data, Evas *e EINA_UNUSED, Evas_Object *obj EINA_UNU
      _e_video_render(video, __FUNCTION__);
 }
 
+static void
+_e_video_cb_evas_show(void *data, Evas *e EINA_UNUSED, Evas_Object *obj EINA_UNUSED, void *event_info EINA_UNUSED)
+{
+   E_Video *video = data;
+
+   if (e_object_is_del(E_OBJECT(video->ec))) return;
+
+   /* if stand_alone is true, not show */
+   if (video->ec->comp_data->sub.data && video->ec->comp_data->sub.data->stand_alone)
+     {
+        if (video->tdm_mute_id != -1)
+          {
+             tdm_value v = {.u32 = 0};
+             VIN("video surface show. mute off");
+             tdm_layer_set_property(video->layer, video->tdm_mute_id, v);
+          }
+        return;
+     }
+
+   VIN("show");
+   if (video->current_fb)
+     _e_video_frame_buffer_show(video, video->current_fb);
+}
+
+static void
+_e_video_cb_evas_hide(void *data, Evas *e EINA_UNUSED, Evas_Object *obj EINA_UNUSED, void *event_info EINA_UNUSED)
+{
+   E_Video *video = data;
+
+   if (e_object_is_del(E_OBJECT(video->ec))) return;
+
+   /* if stand_alone is true, not hide */
+   if (video->ec->comp_data->sub.data && video->ec->comp_data->sub.data->stand_alone)
+     {
+        if (video->tdm_mute_id != -1)
+          {
+             tdm_value v = {.u32 = 1};
+             VIN("video surface hide. mute on");
+             tdm_layer_set_property(video->layer, video->tdm_mute_id, v);
+          }
+        return;
+     }
+
+   VIN("hide");
+   _e_video_frame_buffer_show(video, NULL);
+}
+
 static E_Video*
 _e_video_create(struct wl_resource *video_object, struct wl_resource *surface)
 {
@@ -1056,6 +1106,7 @@ _e_video_create(struct wl_resource *video_object, struct wl_resource *surface)
    video->output_align = -1;
    video->pp_align = -1;
    video->video_align = -1;
+   video->tdm_mute_id = -1;
 
    VIN("create. ec(%p) wl_surface@%d", ec, wl_resource_get_id(video->surface));
 
@@ -1170,6 +1221,9 @@ _e_video_set(E_Video *video, E_Client *ec)
         tdm_value value;
         tdm_layer_get_property(video->layer, props[i].id, &value);
         tizen_video_object_send_attribute(video->video_object, props[i].name, value.u32);
+
+        if (!strncmp(props[i].name, "mute", TDM_NAME_LEN))
+          video->tdm_mute_id = props[i].id;
      }
 }
 
@@ -1191,6 +1245,10 @@ _e_video_destroy(E_Video *video)
                                             _e_video_cb_evas_resize, video);
         evas_object_event_callback_del_full(video->ec->frame, EVAS_CALLBACK_MOVE,
                                             _e_video_cb_evas_move, video);
+        evas_object_event_callback_del_full(video->ec->frame, EVAS_CALLBACK_HIDE,
+                                            _e_video_cb_evas_hide, video);
+        evas_object_event_callback_del_full(video->ec->frame, EVAS_CALLBACK_SHOW,
+                                            _e_video_cb_evas_show, video);
      }
 
    wl_resource_set_destructor(video->video_object, NULL);
@@ -1342,6 +1400,13 @@ _e_video_render(E_Video *video, const char *func)
    if (!video->ec->pixmap)
      return;
 
+   if (!video->ec->comp_data->sub.data || !video->ec->comp_data->sub.data->stand_alone)
+     if (!evas_object_visible_get(video->ec->frame))
+       {
+          VWR("video surface: invisible (%s)", func);
+          return;
+       }
+
    comp_buffer = e_pixmap_resource_get(video->ec->pixmap);
    if (!comp_buffer)
      {
@@ -1477,6 +1542,10 @@ done:
                                        _e_video_cb_evas_resize, video);
         evas_object_event_callback_add(video->ec->frame, EVAS_CALLBACK_MOVE,
                                        _e_video_cb_evas_move, video);
+        evas_object_event_callback_add(video->ec->frame, EVAS_CALLBACK_HIDE,
+                                       _e_video_cb_evas_hide, video);
+        evas_object_event_callback_add(video->ec->frame, EVAS_CALLBACK_SHOW,
+                                       _e_video_cb_evas_show, video);
         video->cb_registered = EINA_TRUE;
      }
    DBG("======================================.");
@@ -1551,35 +1620,6 @@ _e_video_cb_ec_remove(void *data, int type, void *event)
    return ECORE_CALLBACK_PASS_ON;
 }
 
-static Eina_Bool
-_e_video_cb_ec_hide(void *data, int type, void *event)
-{
-   E_Event_Client *ev = event;
-   E_Client *ec, *topmost;
-   E_Video *video;
-
-   EINA_SAFETY_ON_NULL_RETURN_VAL(ev, ECORE_CALLBACK_PASS_ON);
-   EINA_SAFETY_ON_NULL_RETURN_VAL(ev->ec, ECORE_CALLBACK_PASS_ON);
-
-   ec = ev->ec;
-   if (!ec->comp_data) return ECORE_CALLBACK_PASS_ON;
-
-   video = find_video_with_surface(ec->comp_data->surface);
-   if (!video) return ECORE_CALLBACK_PASS_ON;
-
-   topmost = find_topmost_parent_get(ec);
-   if (!topmost) return ECORE_CALLBACK_PASS_ON;
-
-   /* if topmost parent is visible, we don't hide previous video frame. */
-   if (topmost->visible) return ECORE_CALLBACK_PASS_ON;
-
-   VIN("hide");
-
-   _e_video_frame_buffer_show(video, NULL);
-
-   return ECORE_CALLBACK_PASS_ON;
-}
-
 static void
 _e_devicemgr_video_object_destroy(struct wl_resource *resource)
 {
@@ -1631,8 +1671,7 @@ _e_devicemgr_video_object_cb_set_attribute(struct wl_client *client,
      {
         if (!strncmp(name, props[i].name, TDM_NAME_LEN))
           {
-             tdm_value v;
-             v.u32 = value;
+             tdm_value v = {.u32 = value};
              tdm_layer_set_property(video->layer, props[i].id, v);
              if (props[i].id == video->tdm_mute_id)
                VDB("property(%s) value(%d)", name, value);
@@ -1797,8 +1836,6 @@ e_devicemgr_video_init(void)
                          _e_video_cb_ec_buffer_change, NULL);
    E_LIST_HANDLER_APPEND(video_hdlrs, E_EVENT_CLIENT_REMOVE,
                          _e_video_cb_ec_remove, NULL);
-   E_LIST_HANDLER_APPEND(video_hdlrs, E_EVENT_CLIENT_HIDE,
-                         _e_video_cb_ec_hide, NULL);
 
    return 1;
 }
