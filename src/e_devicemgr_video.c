@@ -185,6 +185,36 @@ find_topmost_parent_get(E_Client *ec)
    return ec;
 }
 
+static E_Devmgr_Buf*
+_e_video_mbuf_find(Eina_List *list, tbm_surface_h buffer)
+{
+   E_Devmgr_Buf *mbuf;
+   Eina_List *l = NULL;
+
+   EINA_LIST_FOREACH(list, l, mbuf)
+     {
+        if (mbuf->tbm_surface == buffer)
+           return mbuf;
+     }
+
+   return NULL;
+}
+
+static E_Devmgr_Buf*
+_e_video_mbuf_find_with_comp_buffer(Eina_List *list, E_Comp_Wl_Buffer *comp_buffer)
+{
+   E_Devmgr_Buf *mbuf;
+   Eina_List *l = NULL;
+
+   EINA_LIST_FOREACH(list, l, mbuf)
+     {
+        if (mbuf->comp_buffer == comp_buffer)
+           return mbuf;
+     }
+
+   return NULL;
+}
+
 static void
 _e_video_input_buffer_cb_free(E_Devmgr_Buf *mbuf, void *data)
 {
@@ -227,6 +257,9 @@ static E_Devmgr_Buf*
 _e_video_input_buffer_get(E_Video *video, E_Comp_Wl_Buffer *comp_buffer, Eina_Bool scanout)
 {
    E_Devmgr_Buf *mbuf;
+
+   mbuf = _e_video_mbuf_find_with_comp_buffer(video->input_buffer_list, comp_buffer);
+   if (mbuf) return mbuf;
 
    mbuf = e_devmgr_buffer_create(comp_buffer->resource);
    EINA_SAFETY_ON_NULL_RETURN_VAL(mbuf, NULL);
@@ -1337,21 +1370,6 @@ _e_video_check_if_pp_needed(E_Video *video)
 need_pp:
    video->pp_tbmfmt = video->tbmfmt;
    return EINA_TRUE;
-}
-
-static E_Devmgr_Buf*
-_e_video_mbuf_find(Eina_List *list, tbm_surface_h buffer)
-{
-   E_Devmgr_Buf *mbuf;
-   Eina_List *l = NULL;
-
-   EINA_LIST_FOREACH(list, l, mbuf)
-     {
-        if (mbuf->tbm_surface == buffer)
-           return mbuf;
-     }
-
-   return NULL;
 }
 
 static void
