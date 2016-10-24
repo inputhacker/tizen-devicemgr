@@ -335,7 +335,7 @@ _e_video_pp_buffer_get(E_Video *video, int width, int height)
         EINA_SAFETY_ON_NULL_RETURN_VAL(mbuf, NULL);
 
         /* if we need bigger pp_buffers, destroy all pp_buffers and create */
-        if (aligned_width != mbuf->width_from_pitch || height != mbuf->height)
+        if (aligned_width > mbuf->width_from_pitch || height != mbuf->height)
           {
              E_Video_Fb *vfb;
              Eina_List *ll;
