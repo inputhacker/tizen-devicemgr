@@ -29,6 +29,7 @@ static int _video_detail_log_dom = -1;
    (g)->output_r.w, (g)->output_r.h, (g)->output_r.x, (g)->output_r.y, \
    (g)->transform
 
+/* TODO: really need this E_Video_Fb structure? we can use E_Devmgr_Buf instead of it */
 typedef struct _E_Video_Fb
 {
    E_Devmgr_Buf *mbuf;
@@ -215,6 +216,27 @@ _e_video_mbuf_find_with_comp_buffer(Eina_List *list, E_Comp_Wl_Buffer *comp_buff
    return NULL;
 }
 
+static Eina_Bool
+_e_video_is_visible(E_Video *video)
+{
+   if (e_object_is_del(E_OBJECT(video->ec))) return EINA_FALSE;
+
+   if (!video->ec->comp_data->sub.data || !video->ec->comp_data->sub.data->stand_alone)
+     if (!evas_object_visible_get(video->ec->frame))
+       {
+           VDB("video surface invisible: hidden");
+           return EINA_FALSE;
+       }
+
+   if (!e_pixmap_resource_get(video->ec->pixmap))
+     {
+        VDB("video surface invisible: no comp buffer");
+        return EINA_FALSE;
+     }
+
+   return EINA_TRUE;
+}
+
 static void
 _e_video_input_buffer_cb_free(E_Devmgr_Buf *mbuf, void *data)
 {
@@ -237,10 +259,10 @@ _e_video_input_buffer_cb_free(E_Devmgr_Buf *mbuf, void *data)
    if (video->current_fb && video->current_fb->mbuf == mbuf)
      {
         VIN("current fb destroyed");
+        video->current_fb->mbuf->in_use = EINA_FALSE;
         _e_video_frame_buffer_show(video, NULL);
         _e_video_frame_buffer_destroy(video->current_fb);
         video->current_fb = NULL;
-        return;
      }
 
    /* if waiting fb is destroyed */
@@ -249,7 +271,6 @@ _e_video_input_buffer_cb_free(E_Devmgr_Buf *mbuf, void *data)
        {
            video->waiting_list = eina_list_remove(video->waiting_list, vfb);
           _e_video_frame_buffer_destroy(vfb);
-          return;
        }
 }
 
@@ -383,6 +404,8 @@ _e_video_pp_buffer_get(E_Video *video, int width, int height)
              EINA_LIST_FOREACH_SAFE(video->pp_buffer_list, l, ll, mbuf)
                {
                   video->pp_buffer_list = eina_list_remove(video->pp_buffer_list, mbuf);
+                  /* free forcely */
+                  mbuf->in_use = EINA_FALSE;
                   e_devmgr_buffer_unref(mbuf);
                }
              if (video->pp_buffer_list)
@@ -904,14 +927,12 @@ _e_video_commit_handler(tdm_output *output, unsigned int sequence,
 
    vfb = eina_list_nth(video->waiting_list, 0);
    if (!vfb) return;
+   if (!_e_video_is_visible(video)) return;
 
    video->waiting_list = eina_list_remove(video->waiting_list, vfb);
 
    if (video->current_fb)
-     {
-        _e_video_frame_buffer_destroy(video->current_fb);
-        video->current_fb = NULL;
-     }
+     _e_video_frame_buffer_destroy(video->current_fb);
 
    video->current_fb = vfb;
 
@@ -928,9 +949,6 @@ _e_video_frame_buffer_show(E_Video *video, E_Video_Fb *vfb)
 
    if (!vfb)
      {
-        if (video->current_fb && video->current_fb->mbuf)
-          video->current_fb->mbuf->in_use = EINA_FALSE;
-
         VIN("stop video: hide");
         tdm_layer_unset_buffer(video->layer);
         tdm_output_commit(video->output, 0, NULL, NULL);
@@ -963,10 +981,10 @@ _e_video_frame_buffer_show(E_Video *video, E_Video_Fb *vfb)
    ret = tdm_layer_set_buffer(video->layer, vfb->mbuf->tbm_surface);
    EINA_SAFETY_ON_FALSE_GOTO(ret == TDM_ERROR_NONE, show_fail);
 
-   vfb->mbuf->in_use = EINA_TRUE;
-
    ret = tdm_output_commit(video->output, 0, _e_video_commit_handler, video);
    EINA_SAFETY_ON_FALSE_GOTO(ret == TDM_ERROR_NONE, show_fail);
+
+   vfb->mbuf->in_use = EINA_TRUE;
 
    topmost = find_topmost_parent_get(video->ec);
    if (topmost && (topmost->argb || topmost->comp_data->sub.below_obj) &&
@@ -1015,6 +1033,12 @@ show_fail:
    VIN("stop video: show failed");
    tdm_layer_unset_buffer(video->layer);
    tdm_output_commit(video->output, 0, NULL, NULL);
+   if (video->current_fb)
+     {
+        video->current_fb->mbuf->in_use = EINA_FALSE;
+        _e_video_frame_buffer_destroy(video->current_fb);
+        video->current_fb = NULL;
+     }
    return EINA_FALSE;
 }
 
@@ -1286,11 +1310,10 @@ _e_video_destroy(E_Video *video)
 
    wl_resource_set_destructor(video->video_object, NULL);
 
-   /* hide video plane first */
-   _e_video_frame_buffer_show(video, NULL);
-
    if (video->current_fb)
      {
+        video->current_fb->mbuf->in_use = EINA_FALSE;
+        _e_video_frame_buffer_show(video, NULL);
         _e_video_frame_buffer_destroy(video->current_fb);
         video->current_fb = NULL;
      }
@@ -1390,6 +1413,8 @@ _e_video_pp_cb_done(tdm_pp *pp, tbm_surface_h sb, tbm_surface_h db, void *user_d
    if (input_buffer)
      e_devmgr_buffer_unref(input_buffer);
 
+   if (!_e_video_is_visible(video)) return;
+
    pp_buffer = _e_video_mbuf_find(video->pp_buffer_list, db);
    if (pp_buffer)
      {
@@ -1418,23 +1443,20 @@ _e_video_render(E_Video *video, const char *func)
    if (!video->ec->pixmap)
      return;
 
-   if (!video->ec->comp_data->sub.data || !video->ec->comp_data->sub.data->stand_alone)
-     if (!evas_object_visible_get(video->ec->frame))
-       {
-          VWR("video surface: invisible (%s)", func);
-          return;
-       }
-
-   comp_buffer = e_pixmap_resource_get(video->ec->pixmap);
-   if (!comp_buffer)
+   if (!_e_video_is_visible(video))
      {
-        if (video->layer)
+        if (video->layer && video->current_fb)
           {
-             VIN("no comp_buffer");
+             video->current_fb->mbuf->in_use = EINA_FALSE;
              _e_video_frame_buffer_show(video, NULL);
+             _e_video_frame_buffer_destroy(video->current_fb);
+             video->current_fb = NULL;
           }
         return;
      }
+
+   comp_buffer = e_pixmap_resource_get(video->ec->pixmap);
+   if (!comp_buffer) return;
 
    _e_video_format_info_get(video);
 
