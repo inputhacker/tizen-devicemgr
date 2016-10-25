@@ -40,12 +40,19 @@
 
 typedef struct _e_devicemgr_input_devmgr_data e_devicemgr_input_devmgr_data;
 typedef struct _e_devicemgr_input_device_user_data e_devicemgr_input_device_user_data;
+typedef struct _e_devicemgr_inputgen_client_data e_devicemgr_inputgen_client_data;
 
 struct _e_devicemgr_input_device_user_data
 {
    E_Comp_Wl_Input_Device *dev;
    struct wl_resource *dev_mgr_res;
    struct wl_resource *seat_res;
+};
+
+struct _e_devicemgr_inputgen_client_data
+{
+   struct wl_client *client;
+   int ref;
 };
 
 struct _e_devicemgr_input_devmgr_data
@@ -80,7 +87,6 @@ struct _e_devicemgr_input_devmgr_data
          int uinp_fd;
          char *uinp_identifier;
       } touch;
-      unsigned int ref;
       Eina_List *clients;
    }inputgen;
 
