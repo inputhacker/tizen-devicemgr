@@ -40,6 +40,8 @@ typedef struct _E_Video_Fb
 
    /* in case of non-converting */
    E_Comp_Wl_Buffer_Ref buffer_ref;
+   /* signifies video buffer destruction is in progress */
+   Eina_Bool vfb_destroying;
 } E_Video_Fb;
 
 struct _E_Video
@@ -929,6 +931,16 @@ _e_video_frame_buffer_destroy(E_Video_Fb *vfb)
 {
    if (!vfb) return;
 
+   /* don't destory video buffer if it is already destroying - preventing double freeing of vfb */
+   if (vfb->vfb_destroying == EINA_TRUE)
+     {
+        return;
+     }
+   else
+     {
+        vfb->vfb_destroying = EINA_TRUE;
+     }
+
    if (vfb->mbuf)
      {
         vfb->mbuf->in_use = EINA_FALSE;
@@ -1351,7 +1363,11 @@ _e_video_destroy(E_Video *video)
      }
 
    EINA_LIST_FOREACH_SAFE(video->waiting_list, l, ll, vfb)
-     _e_video_frame_buffer_destroy(vfb);
+     {
+        /* removing vfb from waiting list - preventing double freeing of vfb*/
+        video->waiting_list = eina_list_remove(video->waiting_list, vfb);
+        _e_video_frame_buffer_destroy(vfb);
+     }
 
    /* others */
    EINA_LIST_FOREACH_SAFE(video->input_buffer_list, l, ll, mbuf)
