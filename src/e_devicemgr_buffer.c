@@ -580,7 +580,9 @@ _e_devmgr_buffer_free(E_Devmgr_Buf *mbuf, const char *func)
    mbuf->stamp = 0;
 
    if (mbuf->func)
-     free(mbuf->func);
+     {
+        free(mbuf->func);
+     }
 
    free(mbuf);
 }
@@ -589,7 +591,8 @@ static void
 _e_devmgr_buffer_cb_destroy(struct wl_listener *listener, void *data)
 {
    E_Devmgr_Buf *mbuf = container_of(listener, E_Devmgr_Buf, destroy_listener);
-   e_devmgr_buffer_free(mbuf);
+   if (mbuf && (mbuf->buffer_destroying == EINA_FALSE))
+     e_devmgr_buffer_free(mbuf);
 }
 
 void
