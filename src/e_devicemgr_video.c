@@ -186,6 +186,29 @@ find_topmost_parent_get(E_Client *ec)
    return ec;
 }
 
+static E_Client*
+find_offscreen_parent_get(E_Client *ec)
+{
+   E_Client *parent = NULL;
+
+   if (!ec->comp_data || !ec->comp_data->sub.data)
+      return NULL;
+
+   parent = ec->comp_data->sub.data->parent;
+   while (parent)
+     {
+        if (!parent->comp_data || !parent->comp_data->sub.data)
+          return NULL;
+
+        if (parent->comp_data->sub.data->remote_surface.offscreen_parent)
+          return parent->comp_data->sub.data->remote_surface.offscreen_parent;
+
+        parent = parent->comp_data->sub.data->parent;
+     }
+
+   return NULL;
+}
+
 static E_Devmgr_Buf*
 _e_video_mbuf_find(Eina_List *list, tbm_surface_h buffer)
 {
@@ -219,7 +242,16 @@ _e_video_mbuf_find_with_comp_buffer(Eina_List *list, E_Comp_Wl_Buffer *comp_buff
 static Eina_Bool
 _e_video_is_visible(E_Video *video)
 {
+   E_Client *offscreen_parent;
+
    if (e_object_is_del(E_OBJECT(video->ec))) return EINA_FALSE;
+
+   offscreen_parent = find_offscreen_parent_get(video->ec);
+   if (offscreen_parent && offscreen_parent->visibility.obscured == E_VISIBILITY_FULLY_OBSCURED)
+     {
+        VDB("video surface invisible: offscreen fully obscured");
+        return EINA_FALSE;
+     }
 
    if (!video->ec->comp_data->sub.data || !video->ec->comp_data->sub.data->stand_alone)
      if (!evas_object_visible_get(video->ec->frame))
@@ -1660,6 +1692,36 @@ _e_video_cb_ec_remove(void *data, int type, void *event)
    return ECORE_CALLBACK_PASS_ON;
 }
 
+static Eina_Bool
+_e_video_cb_ec_visibility_change(void *data, int type, void *event)
+{
+   E_Event_Remote_Surface_Provider *ev = event;
+   E_Client *ec = ev->ec;
+   E_Video *video;
+   Eina_List *l;
+
+   EINA_LIST_FOREACH(video_list, l, video)
+     {
+        E_Client *offscreen_parent = find_offscreen_parent_get(video->ec);
+        if (!offscreen_parent) continue;
+        if (offscreen_parent != ec) continue;
+        switch (ec->visibility.obscured)
+          {
+           case E_VISIBILITY_FULLY_OBSCURED:
+              _e_video_cb_evas_hide(video, NULL, NULL, NULL);
+              break;
+           case E_VISIBILITY_UNOBSCURED:
+              _e_video_cb_evas_show(video, NULL, NULL, NULL);
+              break;
+           default:
+              VER("Not implemented");
+              return ECORE_CALLBACK_PASS_ON;
+          }
+     }
+
+   return ECORE_CALLBACK_PASS_ON;
+}
+
 static void
 _e_devicemgr_video_object_destroy(struct wl_resource *resource)
 {
@@ -1876,6 +1938,8 @@ e_devicemgr_video_init(void)
                          _e_video_cb_ec_buffer_change, NULL);
    E_LIST_HANDLER_APPEND(video_hdlrs, E_EVENT_CLIENT_REMOVE,
                          _e_video_cb_ec_remove, NULL);
+   E_LIST_HANDLER_APPEND(video_hdlrs, E_EVENT_REMOTE_SURFACE_PROVIDER_VISIBILITY_CHANGE,
+                         _e_video_cb_ec_visibility_change, NULL);
 
    return 1;
 }
