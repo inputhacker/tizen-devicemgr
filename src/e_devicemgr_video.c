@@ -242,6 +242,41 @@ _e_video_mbuf_find_with_comp_buffer(Eina_List *list, E_Comp_Wl_Buffer *comp_buff
 }
 
 static Eina_Bool
+_e_video_set_layer(E_Video *video, Eina_Bool set)
+{
+   if (!set)
+     {
+        unsigned int usable = 1;
+        if (!video->layer) return EINA_TRUE;
+        tdm_layer_is_usable(video->layer, &usable);
+        if (!usable)
+          {
+             VIN("stop video: release");
+             tdm_layer_unset_buffer(video->layer);
+             tdm_output_commit(video->output, 0, NULL, NULL);
+          }
+        VIN("release layer: %p", video->layer);
+        e_devicemgr_tdm_set_layer_usable(video->layer, EINA_TRUE);
+        video->layer = NULL;
+     }
+   else
+     {
+        if (video->layer) return EINA_TRUE;
+        if (!video->layer)
+          video->layer = e_devicemgr_tdm_avaiable_video_layer_get(video->output);
+        if (!video->layer)
+          {
+             VER("no available layer for video");
+             return EINA_FALSE;
+          }
+        VIN("assign layer: %p", video->layer);
+        e_devicemgr_tdm_set_layer_usable(video->layer, EINA_FALSE);
+     }
+
+   return EINA_TRUE;
+}
+
+static Eina_Bool
 _e_video_is_visible(E_Video *video)
 {
    E_Client *offscreen_parent;
@@ -258,13 +293,13 @@ _e_video_is_visible(E_Video *video)
    if (!video->ec->comp_data->sub.data || !video->ec->comp_data->sub.data->stand_alone)
      if (!evas_object_visible_get(video->ec->frame))
        {
-           VDB("video surface invisible: hidden");
+           VDB("video surface: hidden");
            return EINA_FALSE;
        }
 
    if (!e_pixmap_resource_get(video->ec->pixmap))
      {
-        VDB("video surface invisible: no comp buffer");
+        VDB("video surface: no comp buffer");
         return EINA_FALSE;
      }
 
@@ -993,10 +1028,15 @@ _e_video_frame_buffer_show(E_Video *video, E_Video_Fb *vfb)
 
    if (!vfb)
      {
-        VIN("stop video: hide");
-        tdm_layer_unset_buffer(video->layer);
-        tdm_output_commit(video->output, 0, NULL, NULL);
+        VIN("unset layer: hide");
+        _e_video_set_layer(video, EINA_FALSE);
         return EINA_TRUE;
+     }
+
+   if (!_e_video_set_layer(video, EINA_TRUE))
+     {
+        VER("set layer failed");
+        return EINA_FALSE;
      }
 
    CLEAR(old_info);
@@ -1074,9 +1114,9 @@ _e_video_frame_buffer_show(E_Video *video, E_Video_Fb *vfb)
 
    return EINA_TRUE;
 show_fail:
-   VIN("stop video: show failed");
-   tdm_layer_unset_buffer(video->layer);
-   tdm_output_commit(video->output, 0, NULL, NULL);
+   VIN("unset layer: show failed");
+   _e_video_set_layer(video, EINA_FALSE);
+
    if (video->current_fb)
      {
         video->current_fb->mbuf->in_use = EINA_FALSE;
@@ -1153,6 +1193,8 @@ _e_video_cb_evas_show(void *data, Evas *e EINA_UNUSED, Evas_Object *obj EINA_UNU
    /* if stand_alone is true, not show */
    if (video->ec->comp_data->sub.data && video->ec->comp_data->sub.data->stand_alone)
      {
+        if (!video->layer) return;
+
         if (video->tdm_mute_id != -1)
           {
              tdm_value v = {.u32 = 0};
@@ -1177,6 +1219,8 @@ _e_video_cb_evas_hide(void *data, Evas *e EINA_UNUSED, Evas_Object *obj EINA_UNU
    /* if stand_alone is true, not hide */
    if (video->ec->comp_data->sub.data && video->ec->comp_data->sub.data->stand_alone)
      {
+        if (!video->layer) return;
+
         if (video->tdm_mute_id != -1)
           {
              tdm_value v = {.u32 = 1};
@@ -1227,6 +1271,7 @@ _e_video_set(E_Video *video, E_Client *ec)
    int pminw = -1, pminh = -1, pmaxw = -1, pmaxh = -1;
    int i, count = 0;
    const tdm_prop *props;
+   tdm_layer *layer;
    tdm_error ret;
 
    if (!video || !ec)
@@ -1263,11 +1308,6 @@ _e_video_set(E_Video *video, E_Client *ec)
         video->output = e_devicemgr_tdm_output_get(video->drm_output);
         EINA_SAFETY_ON_NULL_RETURN(video->output);
      }
-
-   video->layer = e_devicemgr_tdm_avaiable_video_layer_get(video->output);
-   if (!video->layer)
-      video->layer = e_devicemgr_tdm_avaiable_overlay_layer_get(video->output);
-   EINA_SAFETY_ON_NULL_RETURN(video->layer);
 
    tdm_output_get_available_size(video->output, &ominw, &ominh, &omaxw, &omaxh, &video->output_align);
    ret = tdm_display_get_pp_available_size(e_devmgr_dpy->tdm, &pminw, &pminh, &pmaxw, &pmaxh, &video->pp_align);
@@ -1316,11 +1356,12 @@ _e_video_set(E_Video *video, E_Client *ec)
             video->output_align, video->pp_align, video->video_align);
      }
 
-   tdm_layer_get_available_properties(video->layer, &props, &count);
+   layer = e_devicemgr_tdm_video_layer_get(video->output);
+   tdm_layer_get_available_properties(layer, &props, &count);
    for (i = 0; i < count; i++)
      {
         tdm_value value;
-        tdm_layer_get_property(video->layer, props[i].id, &value);
+        tdm_layer_get_property(layer, props[i].id, &value);
         tizen_video_object_send_attribute(video->video_object, props[i].name, value.u32);
 
         if (!strncmp(props[i].name, "mute", TDM_NAME_LEN))
@@ -1354,10 +1395,11 @@ _e_video_destroy(E_Video *video)
 
    wl_resource_set_destructor(video->video_object, NULL);
 
+   _e_video_frame_buffer_show(video, NULL);
+
    if (video->current_fb)
      {
         video->current_fb->mbuf->in_use = EINA_FALSE;
-        _e_video_frame_buffer_show(video, NULL);
         _e_video_frame_buffer_destroy(video->current_fb);
         video->current_fb = NULL;
      }
@@ -1401,15 +1443,16 @@ _e_video_check_if_pp_needed(E_Video *video)
    const tbm_format *formats;
    Eina_Bool found = EINA_FALSE;
    tdm_layer_capability capabilities = 0;
+   tdm_layer *layer = e_devicemgr_tdm_video_layer_get(video->output);
 
-   tdm_layer_get_capabilities(video->layer, &capabilities);
+   tdm_layer_get_capabilities(layer, &capabilities);
 
    /* don't need pp if a layer has TDM_LAYER_CAPABILITY_VIDEO capability*/
    if (capabilities & TDM_LAYER_CAPABILITY_VIDEO)
       return EINA_FALSE;
 
    /* check formats */
-   tdm_layer_get_available_formats(video->layer, &formats, &count);
+   tdm_layer_get_available_formats(layer, &formats, &count);
    for (i = 0; i < count; i++)
      if (formats[i] == video->tbmfmt)
        {
@@ -1493,8 +1536,9 @@ _e_video_render(E_Video *video, const char *func)
 
    if (!_e_video_is_visible(video))
      {
-        if (video->layer && video->current_fb)
+        if (video->current_fb)
           {
+             VIN("video surface invisible");
              video->current_fb->mbuf->in_use = EINA_FALSE;
              _e_video_frame_buffer_show(video, NULL);
              _e_video_frame_buffer_destroy(video->current_fb);
@@ -1777,6 +1821,12 @@ _e_devicemgr_video_object_cb_set_attribute(struct wl_client *client,
    video = wl_resource_get_user_data(resource);
    EINA_SAFETY_ON_NULL_RETURN(video);
 
+   if (!_e_video_set_layer(video, EINA_TRUE))
+     {
+        VER("set layer failed");
+        return;
+     }
+
    tdm_layer_get_available_properties(video->layer, &props, &count);
 
    if(!strncmp(name, "mute", TDM_NAME_LEN) && video->ec)
@@ -1904,12 +1954,7 @@ _e_devicemgr_video_cb_bind(struct wl_client *client, void *data, uint32_t versio
 
         EINA_SAFETY_ON_NULL_RETURN(output);
 
-        /* 2nd, use video_layer information.
-         * 3rd, use overlay_layer information.
-         */
-        layer = e_devicemgr_tdm_avaiable_video_layer_get(output);
-        if (!layer)
-           layer = e_devicemgr_tdm_avaiable_overlay_layer_get(output);
+        layer = e_devicemgr_tdm_video_layer_get(output);
         EINA_SAFETY_ON_NULL_RETURN(layer);
 
         tdm_layer_get_available_formats(layer, &formats, &count);
@@ -1990,6 +2035,9 @@ e_devicemgr_video_fb_get(E_Video *video)
    tdm_layer_capability capabilities = 0;
 
    EINA_SAFETY_ON_NULL_RETURN_VAL(video, NULL);
+
+   if (!video->layer)
+      return NULL;
 
    if (tdm_layer_get_capabilities(video->layer, &capabilities) != TDM_ERROR_NONE)
       return NULL;
