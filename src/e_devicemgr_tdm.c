@@ -7,7 +7,10 @@
 #include "e_devicemgr_tdm.h"
 #include "e_devicemgr_dpms.h"
 
+//#define CHECKING_PRIMARY_ZPOS
+
 E_DevMgr_Display *e_devmgr_dpy;
+static Eina_List *e_devmgr_dpy_layers;
 
 static int
 _e_devicemgr_drm_fd_get(void)
@@ -177,9 +180,13 @@ found:
 }
 
 tdm_layer*
-e_devicemgr_tdm_avaiable_video_layer_get(tdm_output *output)
+e_devicemgr_tdm_video_layer_get(tdm_output *output)
 {
    int i, count = 0;
+#ifdef CHECKING_PRIMARY_ZPOS
+   int primary_idx = 0, primary_zpos = 0;
+   tdm_layer *primary_layer;
+#endif
 
    EINA_SAFETY_ON_NULL_RETURN_VAL(output, NULL);
 
@@ -192,25 +199,16 @@ e_devicemgr_tdm_avaiable_video_layer_get(tdm_output *output)
 
         tdm_layer_get_capabilities(layer, &capabilities);
         if (capabilities & TDM_LAYER_CAPABILITY_VIDEO)
-          {
-             unsigned int usable = 0;
-             tdm_layer_is_usable(layer, &usable);
-             if (!usable)
-               continue;
-             return layer;
-          }
+          return layer;
      }
-   return NULL;
-}
 
-tdm_layer*
-e_devicemgr_tdm_avaiable_overlay_layer_get(tdm_output *output)
-{
-   int i, count = 0;
+#ifdef CHECKING_PRIMARY_ZPOS
+   tdm_output_get_primary_index(output, &primary_idx);
+   primary_layer = tdm_output_get_layer(output, primary_idx, NULL);
+   EINA_SAFETY_ON_NULL_RETURN_VAL(primary_layer, NULL);
+   tdm_layer_get_zpos(primary_layer, &primary_zpos);
+#endif
 
-   EINA_SAFETY_ON_NULL_RETURN_VAL(output, NULL);
-
-   tdm_output_get_layer_count(output, &count);
    for (i = 0; i < count; i++)
      {
         tdm_layer *layer = tdm_output_get_layer(output, i, NULL);
@@ -220,12 +218,103 @@ e_devicemgr_tdm_avaiable_overlay_layer_get(tdm_output *output)
         tdm_layer_get_capabilities(layer, &capabilities);
         if (capabilities & TDM_LAYER_CAPABILITY_OVERLAY)
           {
-             unsigned int usable = 0;
-             tdm_layer_is_usable(layer, &usable);
-             if (!usable)
-               continue;
+#ifdef CHECKING_PRIMARY_ZPOS
+             int zpos = 0;
+             tdm_layer_get_zpos(layer, &zpos);
+             if (zpos >= primary_zpos) continue;
+#endif
              return layer;
           }
      }
+
    return NULL;
+}
+
+tdm_layer*
+e_devicemgr_tdm_avaiable_video_layer_get(tdm_output *output)
+{
+   Eina_Bool has_video_layer = EINA_FALSE;
+   int i, count = 0;
+#ifdef CHECKING_PRIMARY_ZPOS
+   int primary_idx = 0, primary_zpos = 0;
+   tdm_layer *primary_layer;
+#endif
+
+   EINA_SAFETY_ON_NULL_RETURN_VAL(output, NULL);
+
+   /* check video layers first */
+   tdm_output_get_layer_count(output, &count);
+   for (i = 0; i < count; i++)
+     {
+        tdm_layer *layer = tdm_output_get_layer(output, i, NULL);
+        tdm_layer_capability capabilities = 0;
+        EINA_SAFETY_ON_NULL_RETURN_VAL(layer, NULL);
+
+        tdm_layer_get_capabilities(layer, &capabilities);
+        if (capabilities & TDM_LAYER_CAPABILITY_VIDEO)
+          {
+             has_video_layer = EINA_TRUE;
+             if (!e_devicemgr_tdm_get_layer_usable(layer)) continue;
+             return layer;
+          }
+     }
+
+   /* if a output has video layers, it means that there is no available video layer for video */
+   if (has_video_layer)
+     return NULL;
+
+   /* check graphic layers second */
+#ifdef CHECKING_PRIMARY_ZPOS
+   tdm_output_get_primary_index(output, &primary_idx);
+   primary_layer = tdm_output_get_layer(output, primary_idx, NULL);
+   EINA_SAFETY_ON_NULL_RETURN_VAL(primary_layer, NULL);
+   tdm_layer_get_zpos(primary_layer, &primary_zpos);
+#endif
+
+   for (i = 0; i < count; i++)
+     {
+        tdm_layer *layer = tdm_output_get_layer(output, i, NULL);
+        tdm_layer_capability capabilities = 0;
+        EINA_SAFETY_ON_NULL_RETURN_VAL(layer, NULL);
+
+        tdm_layer_get_capabilities(layer, &capabilities);
+        if (capabilities & TDM_LAYER_CAPABILITY_OVERLAY)
+          {
+#ifdef CHECKING_PRIMARY_ZPOS
+             int zpos = 0;
+             tdm_layer_get_zpos(layer, &zpos);
+             if (zpos >= primary_zpos) continue;
+#endif
+             if (!e_devicemgr_tdm_get_layer_usable(layer)) continue;
+             return layer;
+          }
+     }
+
+   return NULL;
+}
+
+void
+e_devicemgr_tdm_set_layer_usable(tdm_layer *layer, Eina_Bool usable)
+{
+   if (usable)
+     e_devmgr_dpy_layers = eina_list_remove(e_devmgr_dpy_layers, layer);
+   else
+     {
+        tdm_layer *used_layer;
+        Eina_List *l = NULL;
+        EINA_LIST_FOREACH(e_devmgr_dpy_layers, l, used_layer)
+          if (used_layer == layer) return;
+        e_devmgr_dpy_layers = eina_list_append(e_devmgr_dpy_layers, layer);
+     }
+}
+
+Eina_Bool
+e_devicemgr_tdm_get_layer_usable(tdm_layer *layer)
+{
+   tdm_layer *used_layer;
+   Eina_List *l = NULL;
+   EINA_LIST_FOREACH(e_devmgr_dpy_layers, l, used_layer)
+     if (used_layer == layer)
+       return EINA_FALSE;
+   return EINA_TRUE;
 }

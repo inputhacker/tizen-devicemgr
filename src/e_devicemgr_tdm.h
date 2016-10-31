@@ -38,7 +38,9 @@ void e_devicemgr_tdm_fini(void);
 void e_devicemgr_tdm_update(void);
 
 tdm_output *e_devicemgr_tdm_output_get(Ecore_Drm_Output *output);
+tdm_layer *e_devicemgr_tdm_video_layer_get(tdm_output *output);
 tdm_layer *e_devicemgr_tdm_avaiable_video_layer_get(tdm_output *output);
-tdm_layer *e_devicemgr_tdm_avaiable_overlay_layer_get(tdm_output *output);
+void e_devicemgr_tdm_set_layer_usable(tdm_layer *layer, Eina_Bool usable);
+Eina_Bool e_devicemgr_tdm_get_layer_usable(tdm_layer *layer);
 
 #endif
