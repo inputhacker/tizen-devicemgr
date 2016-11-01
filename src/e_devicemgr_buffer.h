@@ -56,7 +56,8 @@ typedef struct _E_Devmgr_Buf
    /* for wl_buffer.release event */
    E_Comp_Wl_Buffer *comp_buffer;
    E_Comp_Wl_Buffer_Ref buffer_ref;
-   uint put_time;
+   Eina_Rectangle content_r;        /* content rect */
+   unsigned int content_t;          /* content transform */
 } E_Devmgr_Buf;
 
 E_Devmgr_Buf* _e_devmgr_buffer_create     (struct wl_resource *resource, const char *func);
