@@ -5,7 +5,7 @@
 #include "e_devicemgr_tdm.h"
 #include "e_devicemgr_video.h"
 #include "e_devicemgr_eom.h"
-#include "eom-server-protocol.h"
+#include <eom-server-protocol.h>
 #include <Ecore_Drm.h>
 #include <tdm.h>
 #include <eom.h>
