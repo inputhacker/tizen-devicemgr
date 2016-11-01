@@ -538,6 +538,8 @@ _e_devmgr_buffer_free(E_Devmgr_Buf *mbuf, const char *func)
 
    MBUF_RETURN_IF_FAIL(_e_devmgr_buffer_valid(mbuf, func));
 
+   BDB("mbuf(%p) freed: %s", mbuf, func);
+
    mbuf->buffer_destroying = EINA_TRUE;
 
    if (mbuf->destroy_listener.notify)
@@ -574,8 +576,6 @@ _e_devmgr_buffer_free(E_Devmgr_Buf *mbuf, const char *func)
      }
 
    mbuf_lists = eina_list_remove(mbuf_lists, mbuf);
-
-   BDB("mbuf(%p) freed: %s", mbuf, func);
 
    mbuf->stamp = 0;
 
