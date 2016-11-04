@@ -91,6 +91,30 @@ static const struct tizen_input_device_interface _e_devicemgr_device_interface =
    _e_devicemgr_device_cb_release,
 };
 
+static E_Comp_Wl_Input_Device *
+_e_devicemgr_device_find(const char *name, const char *identifier, const char *seatname, Ecore_Device_Class clas)
+{
+   E_Comp_Wl_Input_Device *dev = NULL;
+   E_Comp_Wl_Seat *seat;
+   Eina_List *l, *ll;
+
+   EINA_SAFETY_ON_NULL_RETURN_VAL(name, NULL);
+   EINA_SAFETY_ON_NULL_RETURN_VAL(identifier, NULL);
+   EINA_SAFETY_ON_NULL_RETURN_VAL(seatname, NULL);
+
+   EINA_LIST_FOREACH(e_comp_wl->seats, l, seat)
+     {
+        if (!eina_streq(seat->name, seatname)) continue;
+        EINA_LIST_FOREACH(seat->device_list, ll, dev)
+          {
+             if ((dev->clas == clas) && (!strcmp(dev->name, name))  && (!strcmp(dev->identifier, identifier)))
+               break;
+          }
+     }
+
+   return dev;
+}
+
 static void
 _e_devicemgr_del_device(const char *name, const char *identifier, const char *seatname, Ecore_Device_Class clas)
 {
@@ -100,6 +124,7 @@ _e_devicemgr_del_device(const char *name, const char *identifier, const char *se
    struct wl_resource *res, *seat_res, *dev_mgr_res;
    uint32_t serial;
    e_devicemgr_input_device_user_data *device_user_data;
+   E_Comp_Wl_Seat *seat;
 
    if (!e_comp) return;
    if (!e_comp_wl) return;
@@ -107,12 +132,7 @@ _e_devicemgr_del_device(const char *name, const char *identifier, const char *se
 
    TRACE_INPUT_BEGIN(_e_devicemgr_del_device);
 
-   EINA_LIST_FOREACH(e_comp_wl->input_device_manager.device_list, l, dev)
-     {
-        if ((dev->clas == clas) && (!strcmp(dev->name, name))  && (!strcmp(dev->identifier, identifier)))
-          break;
-     }
-   if (!dev)
+   if (!(dev = _e_devicemgr_device_find(name, identifier, seatname, clas)))
      {
         TRACE_INPUT_END();
         return;
@@ -127,10 +147,20 @@ _e_devicemgr_del_device(const char *name, const char *identifier, const char *se
    if (dev->name) eina_stringshare_del(dev->name);
    if (dev->identifier) eina_stringshare_del(dev->identifier);
 
+   seat = e_comp_wl_input_seat_get(seatname);
+   if (!seat)
+     {
+        ERR("e_devicemgr_del_device() seat NULL! return");
+        return;
+     }
+
+   if (seat)
+     ERR("_e_devicemgr_del_device() seat_name:%s", seat->name? : "NULL");
+
    serial = wl_display_next_serial(e_comp_wl->wl.disp);
 
    /* TODO: find the seat corresponding to event */
-   EINA_LIST_FOREACH(e_comp_wl->seat.resources, l, seat_res)
+   EINA_LIST_FOREACH(seat->resources, l, seat_res)
      {
         wc = wl_resource_get_client(seat_res);
         EINA_LIST_FOREACH(e_comp_wl->input_device_manager.resources, ll, dev_mgr_res)
@@ -165,7 +195,8 @@ _e_devicemgr_del_device(const char *name, const char *identifier, const char *se
         wl_resource_set_user_data(res, NULL);
      }
 
-   e_comp_wl->input_device_manager.device_list = eina_list_remove(e_comp_wl->input_device_manager.device_list, dev);
+   seat->device_list = eina_list_remove(seat->device_list, dev);
+   ERR("_e_devicemgr_del_device() seat->devicenum:%d", eina_list_count(seat->device_list));
 
    if (e_comp_wl->input_device_manager.last_device_ptr == dev)
      e_comp_wl->input_device_manager.last_device_ptr = NULL;
@@ -204,11 +235,12 @@ _e_devicemgr_add_device(const char *name, const char *identifier, const char *se
    uint32_t serial;
    struct wl_array axes;
    Ecore_Drm_Device *drm_device_data = NULL;
-   Ecore_Drm_Seat *seat = NULL;
+   Ecore_Drm_Seat *drm_seat = NULL;
    Ecore_Drm_Evdev *edev = NULL;
    int wheel_click_angle;
    Eina_List *dev_list;
    e_devicemgr_input_device_user_data *device_user_data;
+   E_Comp_Wl_Seat *seat;
 
    if (!e_comp) return;
    if (!e_comp_wl) return;
@@ -216,26 +248,33 @@ _e_devicemgr_add_device(const char *name, const char *identifier, const char *se
 
    TRACE_INPUT_BEGIN(_e_devicemgr_add_device);
 
-   EINA_LIST_FOREACH(e_comp_wl->input_device_manager.device_list, l, dev)
+   if ((dev = _e_devicemgr_device_find(name, identifier, seatname, clas)))
      {
-        if ((dev->clas == clas) && (!strcmp(dev->identifier, identifier)))
-          {
-             TRACE_INPUT_END();
-             return;
-          }
+        TRACE_INPUT_END();
+        return;
      }
 
    if (!(dev = E_NEW(E_Comp_Wl_Input_Device, 1))) return;
    dev->name = eina_stringshare_add(name);
    dev->identifier = eina_stringshare_add(identifier);
+   dev->seatname = eina_stringshare_add(seatname);
    dev->clas = clas;
+
+   seat = e_comp_wl_input_seat_get(seatname);
+   if (!seat)
+     {
+        ERR("e_devicemgr_add_device() seat NULL! return");
+        return;
+     }
+   if (seat)
+     ERR("_e_devicemgr_add_device() seat_name:%s", seat->name? : "NULL");
 
    wl_array_init(&axes);
 
    /* TODO: find the seat corresponding to event */
    serial = wl_display_next_serial(e_comp_wl->wl.disp);
 
-   EINA_LIST_FOREACH(e_comp_wl->seat.resources, l, seat_res)
+   EINA_LIST_FOREACH(seat->resources, l, seat_res)
      {
         wc = wl_resource_get_client(seat_res);
 
@@ -269,7 +308,8 @@ _e_devicemgr_add_device(const char *name, const char *identifier, const char *se
           }
      }
 
-   e_comp_wl->input_device_manager.device_list = eina_list_append(e_comp_wl->input_device_manager.device_list, dev);
+   seat->device_list = eina_list_append(seat->device_list, dev);
+   ERR("_e_devicemgr_add_device() seat->devicenum:%d", eina_list_count(seat->device_list));
 
    if ((!input_devmgr_data->inputgen.kbd.uinp_identifier) && (dev->clas == ECORE_DEVICE_CLASS_KEYBOARD) &&
        (dev->name && !strncmp(dev->name, "Input Generator", sizeof("Input Generator"))))
@@ -294,9 +334,9 @@ _e_devicemgr_add_device(const char *name, const char *identifier, const char *se
         dev_list = (Eina_List *)ecore_drm_devices_get();
         EINA_LIST_FOREACH(dev_list, l1, drm_device_data)
           {
-             EINA_LIST_FOREACH(drm_device_data->seats, l2, seat)
+             EINA_LIST_FOREACH(drm_device_data->seats, l2, drm_seat)
                {
-                  EINA_LIST_FOREACH(ecore_drm_seat_evdev_list_get(seat), l3, edev)
+                  EINA_LIST_FOREACH(ecore_drm_seat_evdev_list_get(drm_seat), l3, edev)
                     {
                        if (!strncmp(ecore_drm_evdev_name_get(edev), "tizen_detent", sizeof("tizen_detent")))
                          {
@@ -320,6 +360,7 @@ _cb_device_add(void *data EINA_UNUSED, int type EINA_UNUSED, void *event)
    Ecore_Event_Device_Info *e;
 
    if (!(e = event)) return ECORE_CALLBACK_PASS_ON;
+   if (e->clas == ECORE_DEVICE_CLASS_SEAT) return ECORE_CALLBACK_PASS_ON;
 
    _e_devicemgr_add_device(e->name, e->identifier, e->seatname, e->clas);
 
@@ -332,6 +373,7 @@ _cb_device_del(void *data EINA_UNUSED, int type EINA_UNUSED, void *event)
    Ecore_Event_Device_Info *e;
 
    if(!(e = event)) return ECORE_CALLBACK_PASS_ON;
+   if (e->clas == ECORE_DEVICE_CLASS_SEAT) return ECORE_CALLBACK_PASS_ON;
 
    _e_devicemgr_del_device(e->name, e->identifier, e->seatname, e->clas);
 
@@ -514,9 +556,10 @@ _e_devicemgr_send_detent_event(int detent)
    E_Comp_Wl_Input_Device *input_dev;
    struct wl_resource *dev_res;
    struct wl_client *wc;
-   Eina_List *l, *ll;
+   Eina_List *l, *ll, *lll;
    wl_fixed_t f_value;
    E_Client *ec;
+   E_Comp_Wl_Seat *seat;
 
    ec = e_client_focused_get();
 
@@ -527,14 +570,17 @@ _e_devicemgr_send_detent_event(int detent)
    f_value = wl_fixed_from_double(detent*1.0);
    wc = wl_resource_get_client(ec->comp_data->surface);
 
-   EINA_LIST_FOREACH(e_comp_wl->input_device_manager.device_list, l, input_dev)
+   EINA_LIST_FOREACH(e_comp_wl->seats, l, seat)
      {
-        if (!strncmp(input_dev->name, "tizen_detent", sizeof("tizen_detent")))
+        EINA_LIST_FOREACH(seat->device_list, ll, input_dev)
           {
-             EINA_LIST_FOREACH(input_dev->resources, ll, dev_res)
+             if (!strncmp(input_dev->name, "tizen_detent", sizeof("tizen_detent")))
                {
-                  if (wl_resource_get_client(dev_res) != wc) continue;
-                  tizen_input_device_send_axis(dev_res, TIZEN_INPUT_DEVICE_AXIS_TYPE_DETENT, f_value);
+                  EINA_LIST_FOREACH(input_dev->resources, lll, dev_res)
+                    {
+                       if (wl_resource_get_client(dev_res) != wc) continue;
+                       tizen_input_device_send_axis(dev_res, TIZEN_INPUT_DEVICE_AXIS_TYPE_DETENT, f_value);
+                    }
                }
           }
      }
@@ -1515,14 +1561,55 @@ _e_devicemgr_device_mgr_cb_unbind(struct wl_resource *resource)
 }
 
 static void
-_e_devicemgr_device_mgr_cb_bind(struct wl_client *client, void *data, uint32_t version, uint32_t id)
+_e_devicemgr_device_add_send(struct wl_client *client, struct wl_resource *mgr_res, E_Comp_Wl_Seat *seat)
 {
-   struct wl_resource *res, *seat_res, *device_res;
-   Eina_List *l;
-   uint32_t serial;
+   struct wl_resource *seat_res, *device_res;
    E_Comp_Wl_Input_Device *dev;
    struct wl_array axes;
    e_devicemgr_input_device_user_data *device_user_data;
+   uint32_t serial;
+   Eina_List *l, *ll;
+
+   wl_array_init(&axes);
+   serial = wl_display_next_serial(e_comp_wl->wl.disp);
+
+   EINA_LIST_FOREACH(seat->device_list, l, dev)
+     {
+        EINA_LIST_FOREACH(seat->resources, ll, seat_res)
+          {
+             if (wl_resource_get_client(seat_res) != client) continue;
+
+             device_res = wl_resource_create(client, &tizen_input_device_interface, 1, 0);
+             if (!device_res)
+               {
+                  DMERR("Could not create tizen_input_device resource: %m");
+                  return;
+               }
+             device_user_data = E_NEW(e_devicemgr_input_device_user_data, 1);
+             if (!device_user_data)
+               {
+                  DMERR("Failed to allocate memory for input device user data\n");
+                  return;
+               }
+             device_user_data->dev = dev;
+             device_user_data->dev_mgr_res = mgr_res;
+             device_user_data->seat_res = seat_res;
+
+             dev->resources = eina_list_append(dev->resources, device_res);
+
+             wl_resource_set_implementation(device_res, &_e_devicemgr_device_interface, device_user_data,
+                                            _e_devicemgr_device_cb_device_unbind);
+
+             tizen_input_device_manager_send_device_add(mgr_res, serial, dev->identifier, device_res, seat_res);
+             tizen_input_device_send_device_info(device_res, dev->name, dev->clas, TIZEN_INPUT_DEVICE_SUBCLAS_NONE, &axes);
+          }
+     }
+}
+
+static void
+_e_devicemgr_device_mgr_cb_bind(struct wl_client *client, void *data, uint32_t version, uint32_t id)
+{
+   struct wl_resource *res;
 
    if (!e_comp_wl) return;
    if (!e_comp_wl->wl.disp) return;
@@ -1539,40 +1626,31 @@ _e_devicemgr_device_mgr_cb_bind(struct wl_client *client, void *data, uint32_t v
    wl_resource_set_implementation(res, &_e_input_devmgr_implementation, NULL,
                                  _e_devicemgr_device_mgr_cb_unbind);
 
-   EINA_LIST_FOREACH(e_comp_wl->seat.resources, l, seat_res)
+   ERR("_e_devicemgr_device_mgr_cb_bind" );
+
+//   _e_devicemgr_device_add_send(client, res, NULL);
+}
+
+static Eina_Bool
+_cb_seat_bound(void *data EINA_UNUSED, int type EINA_UNUSED, void *event)
+{
+   E_Event_Seat_Bound *ev = event;
+   Eina_List *l;
+   struct wl_resource *dev_mgr_res = NULL;
+
+   EINA_LIST_FOREACH(e_comp_wl->input_device_manager.resources, l, dev_mgr_res)
      {
-        if (wl_resource_get_client(seat_res) != client) continue;
-
-        wl_array_init(&axes);
-        serial = wl_display_next_serial(e_comp_wl->wl.disp);
-
-        EINA_LIST_FOREACH(e_comp_wl->input_device_manager.device_list, l, dev)
-          {
-             device_res = wl_resource_create(client, &tizen_input_device_interface, 1, 0);
-             if (!device_res)
-               {
-                  DMERR("Could not create tizen_input_device resource: %m");
-                  return;
-               }
-             device_user_data = E_NEW(e_devicemgr_input_device_user_data, 1);
-             if (!device_user_data)
-               {
-                  DMERR("Failed to allocate memory for input device user data\n");
-                  return;
-               }
-             device_user_data->dev = dev;
-             device_user_data->dev_mgr_res = res;
-             device_user_data->seat_res = seat_res;
-
-             dev->resources = eina_list_append(dev->resources, device_res);
-
-             wl_resource_set_implementation(device_res, &_e_devicemgr_device_interface, device_user_data,
-                                            _e_devicemgr_device_cb_device_unbind);
-
-             tizen_input_device_manager_send_device_add(res, serial, dev->identifier, device_res, seat_res);
-             tizen_input_device_send_device_info(device_res, dev->name, dev->clas, TIZEN_INPUT_DEVICE_SUBCLAS_NONE, &axes);
-          }
+        if (wl_resource_get_client(dev_mgr_res) == ev->client) break;
      }
+
+   if (dev_mgr_res)
+     ERR("cb_seat_bound() dev_mgr_res:%p, seat_name:%s", dev_mgr_res, ev->seat->name ? :"NULL");
+   else
+     ERR("cb_seat_bound() seat_name:%s", ev->seat->name ? :"NULL");
+
+   _e_devicemgr_device_add_send(ev->client, dev_mgr_res, ev->seat);
+
+   return ECORE_CALLBACK_PASS_ON;
 }
 
 int
@@ -1596,10 +1674,10 @@ e_devicemgr_device_init(void)
         return 0;
      }
    e_comp_wl->input_device_manager.resources = NULL;
-   e_comp_wl->input_device_manager.device_list = NULL;
 
    E_LIST_HANDLER_APPEND(handlers, ECORE_EVENT_DEVICE_ADD, _cb_device_add, NULL);
    E_LIST_HANDLER_APPEND(handlers, ECORE_EVENT_DEVICE_DEL, _cb_device_del, NULL);
+   E_LIST_HANDLER_APPEND(handlers, E_EVENT_SEAT_BOUND, _cb_seat_bound, NULL);
 
    input_devmgr_data = E_NEW(e_devicemgr_input_devmgr_data, 1);
    EINA_SAFETY_ON_NULL_RETURN_VAL(input_devmgr_data, 0);
@@ -1628,9 +1706,9 @@ e_devicemgr_device_init(void)
 void
 e_devicemgr_device_fini(void)
 {
-   E_Comp_Wl_Input_Device *dev;
-   struct wl_resource *res;
-   e_devicemgr_input_device_user_data *device_user_data;
+//   E_Comp_Wl_Input_Device *dev;
+//   struct wl_resource *res;
+//   e_devicemgr_input_device_user_data *device_user_data;
    struct wl_listener *destroy_listener;
    Eina_List *l, *l_next;
    struct wl_client *client;
@@ -1640,7 +1718,7 @@ e_devicemgr_device_fini(void)
      wl_global_destroy(e_comp_wl->input_device_manager.global);
    e_comp_wl->input_device_manager.global = NULL;
 
-   EINA_LIST_FREE(e_comp_wl->input_device_manager.device_list, dev)
+/*   EINA_LIST_FREE(e_comp_wl->input_device_manager.device_list, dev)
      {
         if (dev->name) eina_stringshare_del(dev->name);
         if (dev->identifier) eina_stringshare_del(dev->identifier);
@@ -1660,7 +1738,7 @@ e_devicemgr_device_fini(void)
 
         free(dev);
      }
-
+*/
    E_FREE_LIST(handlers, ecore_event_handler_del);
 
    /* deinitialization of cynara if it has been initialized */
