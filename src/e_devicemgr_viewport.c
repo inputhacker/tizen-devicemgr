@@ -141,8 +141,7 @@ _destroy_viewport(E_Viewport *viewport)
 
    wl_resource_set_user_data(viewport->resource, NULL);
 
-   if (viewport->type == DESTINATION_TYPE_MODE &&
-       viewport->destination.mode.resource)
+   if (viewport->destination.mode.resource)
      wl_resource_set_user_data(viewport->destination.mode.resource, NULL);
 
    if (ec->comp_data && ec->comp_data->scaler.viewport)
@@ -622,6 +621,8 @@ _e_devicemgr_viewport_cb_query_parent_size(struct wl_client *client,
 {
    E_Viewport *viewport = _e_devicemgr_viewport_get_viewport(resource);
    Evas_Coord w = 0, h = 0;
+
+   if (!viewport) return;
 
    if (viewport->epc)
      {
