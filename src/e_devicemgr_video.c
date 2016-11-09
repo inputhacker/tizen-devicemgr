@@ -343,7 +343,7 @@ _e_video_input_buffer_get(E_Video *video, E_Comp_Wl_Buffer *comp_buffer, Eina_Bo
         return mbuf;
      }
 
-   mbuf = e_devmgr_buffer_create_comp(comp_buffer);
+   mbuf = e_devmgr_buffer_create(comp_buffer->resource);
    EINA_SAFETY_ON_NULL_RETURN_VAL(mbuf, NULL);
 
    if (video->pp)
@@ -377,6 +377,7 @@ _e_video_input_buffer_get(E_Video *video, E_Comp_Wl_Buffer *comp_buffer, Eina_Bo
           }
      }
 
+   mbuf->comp_buffer = comp_buffer;
    mbuf->content_r = video->geo.input_r;
 
    video->input_buffer_list = eina_list_append(video->input_buffer_list, mbuf);
