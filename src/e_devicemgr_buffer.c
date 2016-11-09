@@ -175,8 +175,8 @@ _e_devicemgr_buffer_access_data_end(E_Devmgr_Buf *mbuf)
      }
 }
 
-E_Devmgr_Buf*
-_e_devmgr_buffer_create(struct wl_resource *resource, const char *func)
+static E_Devmgr_Buf*
+_e_devmgr_buffer_create_res(struct wl_resource *resource, const char *func)
 {
    E_Devmgr_Buf *mbuf = NULL;
    struct wl_shm_buffer *shm_buffer;
@@ -194,9 +194,6 @@ _e_devmgr_buffer_create(struct wl_resource *resource, const char *func)
    mbuf->func = strdup(func);
 
    mbuf->resource = resource;
-
-   mbuf->destroy_listener.notify = _e_devmgr_buffer_cb_destroy;
-   wl_resource_add_destroy_listener(resource, &mbuf->destroy_listener);
 
    if ((shm_buffer = wl_shm_buffer_get(resource)))
      {
@@ -279,6 +276,36 @@ create_fail:
    e_devmgr_buffer_free(mbuf);
 
    return NULL;
+}
+
+E_Devmgr_Buf*
+_e_devmgr_buffer_create(struct wl_resource *resource, const char *func)
+{
+   E_Devmgr_Buf *mbuf = _e_devmgr_buffer_create_res(resource, func);
+   EINA_SAFETY_ON_NULL_RETURN_VAL(mbuf, NULL);
+
+   mbuf->destroy_listener.notify = _e_devmgr_buffer_cb_destroy;
+   wl_resource_add_destroy_listener(resource, &mbuf->destroy_listener);
+
+   return mbuf;
+}
+
+E_Devmgr_Buf*
+_e_devmgr_buffer_create_comp(E_Comp_Wl_Buffer *comp_buffer, const char *func)
+{
+   E_Devmgr_Buf *mbuf;
+
+   EINA_SAFETY_ON_NULL_RETURN_VAL(comp_buffer, NULL);
+
+   mbuf = _e_devmgr_buffer_create_res(comp_buffer->resource, func);
+   EINA_SAFETY_ON_NULL_RETURN_VAL(mbuf, NULL);
+
+   mbuf->comp_buffer = comp_buffer;
+
+   mbuf->destroy_listener.notify = _e_devmgr_buffer_cb_destroy;
+   wl_signal_add(&comp_buffer->destroy_signal, &mbuf->destroy_listener);
+
+   return mbuf;
 }
 
 E_Devmgr_Buf*

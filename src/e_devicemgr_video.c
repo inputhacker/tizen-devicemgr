@@ -298,7 +298,6 @@ _e_video_input_buffer_cb_free(E_Devmgr_Buf *mbuf, void *data)
    Eina_Bool need_hide = EINA_FALSE;
 
    VDT("Buffer(%p) to be free, refcnt(%d)", mbuf, mbuf->ref_cnt);
-   EINA_SAFETY_ON_NULL_RETURN(mbuf->comp_buffer);
 
    video->input_buffer_list = eina_list_remove(video->input_buffer_list, mbuf);
 
@@ -343,7 +342,7 @@ _e_video_input_buffer_get(E_Video *video, E_Comp_Wl_Buffer *comp_buffer, Eina_Bo
         return mbuf;
      }
 
-   mbuf = e_devmgr_buffer_create(comp_buffer->resource);
+   mbuf = e_devmgr_buffer_create_comp(comp_buffer);
    EINA_SAFETY_ON_NULL_RETURN_VAL(mbuf, NULL);
 
    if (video->pp)
@@ -377,7 +376,6 @@ _e_video_input_buffer_get(E_Video *video, E_Comp_Wl_Buffer *comp_buffer, Eina_Bo
           }
      }
 
-   mbuf->comp_buffer = comp_buffer;
    mbuf->content_r = video->geo.input_r;
 
    video->input_buffer_list = eina_list_append(video->input_buffer_list, mbuf);
