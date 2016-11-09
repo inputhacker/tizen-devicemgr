@@ -58,8 +58,6 @@ typedef struct _E_Viewport {
       struct {
          struct wl_resource *resource;
 
-         Eina_Bool follow_parent_transform;
-
          enum tizen_destination_mode_type type;
 
          double ratio_h;
@@ -80,6 +78,9 @@ typedef struct _E_Viewport {
 
    Eina_Bool query_parent_size;
    Eina_Rectangle parent_size;
+
+   Eina_Bool follow_parent_transform;
+   unsigned int parent_transform;
 } E_Viewport;
 
 static E_Viewport* _e_devicemgr_viewport_get_viewport(struct wl_resource *resource);
@@ -190,12 +191,12 @@ _e_devicemgr_destination_mode_cb_follow_parent_transform(struct wl_client *clien
 
    if (!viewport) return;
 
-   if (viewport->destination.mode.follow_parent_transform)
+   if (viewport->follow_parent_transform)
      return;
 
    PDB("follow_parent_transform");
 
-   viewport->destination.mode.follow_parent_transform = EINA_TRUE;
+   viewport->follow_parent_transform = EINA_TRUE;
    viewport->changed = EINA_TRUE;
 }
 
@@ -207,12 +208,12 @@ _e_devicemgr_destination_mode_cb_unfollow_parent_transform(struct wl_client *cli
 
    if (!viewport) return;
 
-   if (!viewport->destination.mode.follow_parent_transform)
+   if (!viewport->follow_parent_transform)
      return;
 
    PDB("unfollow_parent_transform");
 
-   viewport->destination.mode.follow_parent_transform = EINA_FALSE;
+   viewport->follow_parent_transform = EINA_FALSE;
    viewport->changed = EINA_TRUE;
 }
 
@@ -654,6 +655,40 @@ _e_devicemgr_viewport_cb_query_parent_size(struct wl_client *client,
    tizen_viewport_send_parent_size(resource, w, h);
 }
 
+static void
+_e_devicemgr_viewport_cb_follow_parent_transform(struct wl_client *client EINA_UNUSED,
+                                                 struct wl_resource *resource)
+{
+   E_Viewport *viewport = wl_resource_get_user_data(resource);
+
+   if (!viewport) return;
+
+   if (viewport->follow_parent_transform)
+     return;
+
+   PDB("follow_parent_transform");
+
+   viewport->follow_parent_transform = EINA_TRUE;
+   viewport->changed = EINA_TRUE;
+}
+
+static void
+_e_devicemgr_viewport_cb_unfollow_parent_transform(struct wl_client *client EINA_UNUSED,
+                                                   struct wl_resource *resource)
+{
+   E_Viewport *viewport = wl_resource_get_user_data(resource);
+
+   if (!viewport) return;
+
+   if (!viewport->follow_parent_transform)
+     return;
+
+   PDB("unfollow_parent_transform");
+
+   viewport->follow_parent_transform = EINA_FALSE;
+   viewport->changed = EINA_TRUE;
+}
+
 static const struct tizen_viewport_interface _e_devicemgr_viewport_interface =
 {
    _e_devicemgr_viewport_cb_destroy,
@@ -663,6 +698,8 @@ static const struct tizen_viewport_interface _e_devicemgr_viewport_interface =
    _e_devicemgr_viewport_cb_set_destination_ratio,
    _e_devicemgr_viewport_cb_get_destination_mode,
    _e_devicemgr_viewport_cb_query_parent_size,
+   _e_devicemgr_viewport_cb_follow_parent_transform,
+   _e_devicemgr_viewport_cb_unfollow_parent_transform,
 };
 
 static void
@@ -827,47 +864,15 @@ _destination_mode_calculate_origin_or_letter(int pw, int ph, int sw, int sh,
       _destination_mode_calculate_letter_box(pw, ph, sw, sh, rh, rv, rect);
 }
 
-/* follow_parent_transform will be considered in only this function to get
- * the geometry of a surface. tx, ty, tw, th is specified in transform 0.
- */
 static Eina_Bool
-_destination_mode_calculate_destination(E_Viewport *viewport, Eina_Rectangle *rect)
+_destination_mode_calculate_destination(E_Viewport *viewport, Eina_Rectangle *prect, Eina_Rectangle *rect)
 {
    E_Client *ec = viewport->ec;
    E_Comp_Wl_Buffer_Viewport *vp;
-   int pw = 0, ph = 0, sw = 0, sh = 0;
+   int sw = 0, sh = 0;
    double rh = -1.0, rv = -1.0;
 
    vp = &ec->comp_data->scaler.buffer_viewport;
-
-   if (!viewport->epc)
-     {
-        E_Zone *zone = e_comp_zone_xy_get(ec->x, ec->y);
-
-        EINA_SAFETY_ON_FALSE_RETURN_VAL(zone != NULL, EINA_FALSE);
-
-        pw = zone->w;
-        ph = zone->h;
-     }
-   else
-     {
-        E_Client *epc = viewport->epc;
-        E_Comp_Wl_Buffer_Viewport *vpp;
-
-        if (!epc->comp_data || e_object_is_del(E_OBJECT(epc)))
-          return EINA_FALSE;
-
-        vpp = &epc->comp_data->scaler.buffer_viewport;
-        if (vpp->surface.width != -1)
-          {
-             pw = vpp->surface.width;
-             ph = vpp->surface.height;
-          }
-        else
-          _buffer_size_get(epc->pixmap, &pw, &ph);
-     }
-
-   EINA_SAFETY_ON_FALSE_RETURN_VAL(pw > 0 && ph > 0, EINA_FALSE);
 
    if (viewport->source.w != -1)
      {
@@ -880,7 +885,7 @@ _destination_mode_calculate_destination(E_Viewport *viewport, Eina_Rectangle *re
    if (vp->buffer.transform % 2)
       SWAP(sw, sh);
 
-   PDB("parent(%dx%d) src(%dx%d)", pw, ph, sw, sh);
+   PDB("parent(%dx%d) src(%dx%d)", prect->w, prect->h, sw, sh);
 
    /* ratio -> type -> scale -> offset -> align */
    if (viewport->destination.mode.ratio_h != -1.0)
@@ -897,22 +902,24 @@ _destination_mode_calculate_destination(E_Viewport *viewport, Eina_Rectangle *re
           }
      }
 
+   PDB("%dx%d %dx%d %.2fx%.2f (%d,%d %dx%d)", prect->w, prect->h, sw, sh, rh, rv, EINA_RECTANGLE_ARGS(rect));
+
    switch(viewport->destination.mode.type)
      {
       case TIZEN_DESTINATION_MODE_TYPE_LETTER_BOX:
-         _destination_mode_calculate_letter_box(pw, ph, sw, sh, rh, rv, rect);
+         _destination_mode_calculate_letter_box(prect->w, prect->h, sw, sh, rh, rv, rect);
          break;
       case TIZEN_DESTINATION_MODE_TYPE_ORIGIN:
-         _destination_mode_calculate_origin(pw, ph, sw, sh, rh, rv, rect);
+         _destination_mode_calculate_origin(prect->w, prect->h, sw, sh, rh, rv, rect);
          break;
       case TIZEN_DESTINATION_MODE_TYPE_FULL:
-         _destination_mode_calculate_full(pw, ph, sw, sh, rh, rv, rect);
+         _destination_mode_calculate_full(prect->w, prect->h, sw, sh, rh, rv, rect);
          break;
       case TIZEN_DESTINATION_MODE_TYPE_CROPPED_FULL:
-         _destination_mode_calculate_cropped_full(pw, ph, sw, sh, rh, rv, rect);
+         _destination_mode_calculate_cropped_full(prect->w, prect->h, sw, sh, rh, rv, rect);
          break;
       case TIZEN_DESTINATION_MODE_TYPE_ORIGIN_OR_LETTER:
-         _destination_mode_calculate_origin_or_letter(pw, ph, sw, sh, rh, rv, rect);
+         _destination_mode_calculate_origin_or_letter(prect->w, prect->h, sw, sh, rh, rv, rect);
          break;
       case TIZEN_DESTINATION_MODE_TYPE_NONE:
       default:
@@ -996,8 +1003,8 @@ _destination_mode_calculate_destination(E_Viewport *viewport, Eina_Rectangle *re
                }
           }
 
-        dx = (pw - rect->w) * (h - 0.5);
-        dy = (ph - rect->h) * (v - 0.5);
+        dx = (prect->w - rect->w) * (h - 0.5);
+        dy = (prect->h - rect->h) * (v - 0.5);
 
         rect->x += dx;
         rect->y += dy;
@@ -1027,7 +1034,51 @@ _destination_mode_calculate_destination(E_Viewport *viewport, Eina_Rectangle *re
         rect->h += h;
      }
 
-   PDB("(%d,%d %dx%d)", EINA_RECTANGLE_ARGS(rect));
+   PDB("mode destination(%d,%d %dx%d)", EINA_RECTANGLE_ARGS(rect));
+
+   return EINA_TRUE;
+}
+
+static Eina_Bool
+_e_devicemgr_viewport_calculate_destination(E_Viewport *viewport, Eina_Rectangle *prect, Eina_Rectangle *rect)
+{
+   switch (viewport->type)
+     {
+      case DESTINATION_TYPE_RECT:
+         rect->x = viewport->destination.rect.x;
+         rect->y = viewport->destination.rect.y;
+         rect->w = viewport->destination.rect.w;
+         rect->h = viewport->destination.rect.h;
+         break;
+      case DESTINATION_TYPE_RATIO:
+         rect->x = viewport->destination.ratio.x * prect->w;
+         rect->y = viewport->destination.ratio.y * prect->h;
+         rect->w = viewport->destination.ratio.w * prect->w;
+         rect->h = viewport->destination.ratio.h * prect->h;
+         break;
+      case DESTINATION_TYPE_MODE:
+      case DESTINATION_TYPE_NONE:
+      default:
+         PER("wrong destination type: %d", viewport->type);
+         return EINA_FALSE;
+     }
+
+   if (viewport->epc)
+     {
+        E_Client *epc = viewport->epc;
+        E_Comp_Wl_Buffer_Viewport *vpp;
+
+        vpp = &epc->comp_data->scaler.buffer_viewport;
+        if (vpp->buffer.transform > 0)
+          {
+             if (vpp->buffer.transform % 2)
+               _source_transform_to_surface(prect->h, prect->w, vpp->buffer.transform, 1, rect, rect);
+             else
+               _source_transform_to_surface(prect->w, prect->h, vpp->buffer.transform, 1, rect, rect);
+          }
+     }
+
+   PDB("destination(%d,%d %dx%d)", EINA_RECTANGLE_ARGS(rect));
 
    return EINA_TRUE;
 }
@@ -1040,7 +1091,10 @@ _e_devicemgr_viewport_crop_by_parent(E_Viewport *viewport, Eina_Rectangle *paren
    double rx, ry, rw, rh;
    int bw, bh;
 
+   PDB("dst(%d,%d %dx%d) parent(%d,%d %dx%d)", EINA_RECTANGLE_ARGS(dst), EINA_RECTANGLE_ARGS(parent));
+
    crop = *dst;
+
    if (!eina_rectangle_intersection(&crop, parent))
      {
         *dst = crop;
@@ -1097,11 +1151,74 @@ _e_devicemgr_viewport_crop_by_parent(E_Viewport *viewport, Eina_Rectangle *paren
 }
 
 static Eina_Bool
+_e_devicemgr_viewport_apply_transform(E_Viewport *viewport, int *rtransform)
+{
+   E_Client *ec = viewport->ec;
+   E_Comp_Wl_Buffer_Viewport *vp = &ec->comp_data->scaler.buffer_viewport;
+   Eina_Bool changed = EINA_FALSE;
+   int new_transform;
+
+   new_transform = viewport->transform;
+
+   if (viewport->follow_parent_transform && viewport->epc)
+     {
+        E_Client *epc = viewport->epc;
+        E_Comp_Wl_Buffer_Viewport *vpp;
+        unsigned int parent_transform;
+
+        if (!epc->comp_data || e_object_is_del(E_OBJECT(epc)))
+          {
+             *rtransform = vp->buffer.transform;
+             return EINA_FALSE;
+          }
+
+        vpp = &epc->comp_data->scaler.buffer_viewport;
+
+        PDB("parent's transform(%d) rot.ang.curr(%d)",
+            vpp->buffer.transform, epc->e.state.rot.ang.curr/90);
+
+        parent_transform = (epc->e.state.rot.ang.curr / 90) + vpp->buffer.transform;
+        viewport->parent_transform = parent_transform;
+
+        if (parent_transform >= WL_OUTPUT_TRANSFORM_FLIPPED)
+          PER("need to use matrix to calculate the correct destination in this case");
+
+        if (new_transform < WL_OUTPUT_TRANSFORM_FLIPPED)
+          new_transform = (parent_transform + new_transform) % 4;
+        else
+          {
+             if (parent_transform % 2)
+               new_transform = (4 - parent_transform + new_transform) % 4 + 4;
+             else
+               new_transform = (parent_transform + new_transform) % 4 + 4;
+          }
+     }
+
+   if (new_transform != vp->buffer.transform)
+     {
+        vp->buffer.transform = new_transform;
+        vp->changed = changed = EINA_TRUE;
+
+        ec->comp_data->pending.buffer_viewport = *vp;
+        if (ec->comp_data->sub.data)
+          ec->comp_data->sub.data->cached.buffer_viewport = *vp;
+     }
+
+   PDB("apply transform: %d type(%d) follow(%d) changed(%d)",
+       vp->buffer.transform, viewport->type,
+       viewport->follow_parent_transform, changed);
+
+   *rtransform = vp->buffer.transform;
+
+   return changed;
+}
+
+static Eina_Bool
 _e_devicemgr_viewport_apply_destination(E_Viewport *viewport, Eina_Rectangle *rrect)
 {
    E_Client *ec = viewport->ec;
    E_Comp_Wl_Buffer_Viewport *vp;
-   Eina_Rectangle dst, prect;
+   Eina_Rectangle dst = {0,}, prect;
    Eina_Bool changed = EINA_FALSE;
 
    vp = &ec->comp_data->scaler.buffer_viewport;
@@ -1139,19 +1256,12 @@ _e_devicemgr_viewport_apply_destination(E_Viewport *viewport, Eina_Rectangle *rr
    switch (viewport->type)
      {
       case DESTINATION_TYPE_RECT:
-         dst.x = viewport->destination.rect.x;
-         dst.y = viewport->destination.rect.y;
-         dst.w = viewport->destination.rect.w;
-         dst.h = viewport->destination.rect.h;
-         break;
       case DESTINATION_TYPE_RATIO:
-         dst.x = viewport->destination.ratio.x * prect.w;
-         dst.y = viewport->destination.ratio.y * prect.h;
-         dst.w = viewport->destination.ratio.w * prect.w;
-         dst.h = viewport->destination.ratio.h * prect.h;
+         if (!_e_devicemgr_viewport_calculate_destination(viewport, &prect, &dst))
+           return EINA_FALSE;
          break;
       case DESTINATION_TYPE_MODE:
-         if (!_destination_mode_calculate_destination(viewport, &dst))
+         if (!_destination_mode_calculate_destination(viewport, &prect, &dst))
            return EINA_FALSE;
          break;
       case DESTINATION_TYPE_NONE:
@@ -1251,103 +1361,50 @@ _e_devicemgr_viewport_apply_source(E_Viewport *viewport)
 }
 
 static Eina_Bool
-_e_devicemgr_viewport_apply_transform(E_Viewport *viewport, int *rtransform)
-{
-   E_Client *ec = viewport->ec;
-   E_Comp_Wl_Buffer_Viewport *vp = &ec->comp_data->scaler.buffer_viewport;
-   Eina_Bool changed = EINA_FALSE;
-   int new_transform;
-
-   new_transform = viewport->transform;
-
-   if (viewport->type == DESTINATION_TYPE_MODE &&
-       viewport->destination.mode.follow_parent_transform &&
-       viewport->epc)
-     {
-        E_Client *epc = viewport->epc;
-        E_Comp_Wl_Buffer_Viewport *vpp;
-        unsigned int parent_transform;
-
-        if (!epc->comp_data || e_object_is_del(E_OBJECT(epc)))
-          {
-             *rtransform = vp->buffer.transform;
-             return EINA_FALSE;
-          }
-
-        vpp = &epc->comp_data->scaler.buffer_viewport;
-
-        PDB("parent's transform(%d) rot.ang.curr(%d)",
-            vpp->buffer.transform, epc->e.state.rot.ang.curr/90);
-
-        parent_transform = (epc->e.state.rot.ang.curr / 90) + vpp->buffer.transform;
-
-        if (parent_transform >= WL_OUTPUT_TRANSFORM_FLIPPED)
-          PER("need to use matrix to calculate the correct destination in this case");
-
-        if (new_transform < WL_OUTPUT_TRANSFORM_FLIPPED)
-          new_transform = (parent_transform + new_transform) % 4;
-        else
-          {
-             if (parent_transform % 2)
-               new_transform = (4 - parent_transform + new_transform) % 4 + 4;
-             else
-               new_transform = (parent_transform + new_transform) % 4 + 4;
-          }
-     }
-
-   if (new_transform != vp->buffer.transform)
-     {
-        vp->buffer.transform = new_transform;
-        vp->changed = changed = EINA_TRUE;
-
-        ec->comp_data->pending.buffer_viewport = *vp;
-        if (ec->comp_data->sub.data)
-          ec->comp_data->sub.data->cached.buffer_viewport = *vp;
-     }
-
-   PDB("apply transform: %d type(%d) follow(%d) changed(%d)",
-       vp->buffer.transform, viewport->type,
-       viewport->destination.mode.follow_parent_transform, changed);
-
-   *rtransform = vp->buffer.transform;
-
-   return changed;
-}
-
-static Eina_Bool
 _e_devicemgr_viewport_apply(E_Client *ec)
 {
    E_Viewport *viewport;
-   Eina_Bool changed = EINA_FALSE;
-   Eina_Rectangle rrect = {0,};
-   int rtransform = 0;
+   E_Client *subc;
+   Eina_List *l;
 
-   if (!ec || !ec->comp_data)
+   if (!ec || !ec->comp_data || e_object_is_del(E_OBJECT(ec)))
      return EINA_TRUE;
-
-   if (ec->comp_data->sub.data && ec->comp_data->sub.data->parent)
-     if (!_e_devicemgr_viewport_apply(ec->comp_data->sub.data->parent))
-       return EINA_FALSE;
 
    viewport = _e_devicemgr_viewport_get_viewport(ec->comp_data->scaler.viewport);
 
-   /* not interested if it's not tizen_viewport */
-   if (!viewport) return EINA_TRUE;
+   if (viewport && e_pixmap_resource_get(ec->pixmap))
+     {
+        Eina_Bool changed = EINA_FALSE, src_changed = EINA_FALSE;
+        Eina_Rectangle rrect = {0,};
+        int rtransform = 0;
 
-   changed |= _e_devicemgr_viewport_apply_transform(viewport, &rtransform);
-   changed |= _e_devicemgr_viewport_apply_destination(viewport, &rrect);
-   changed |= _e_devicemgr_viewport_apply_source(viewport);
-   if (!changed) return EINA_TRUE;
+        PDB("apply: ec(%p)", ec);
 
-   e_comp_wl_map_size_cal_from_buffer(viewport->ec);
-   e_comp_wl_map_size_cal_from_viewport(viewport->ec);
-   e_comp_wl_map_apply(viewport->ec);
+        changed |= _e_devicemgr_viewport_apply_transform(viewport, &rtransform);
+        changed |= _e_devicemgr_viewport_apply_destination(viewport, &rrect);
+        src_changed |= _e_devicemgr_viewport_apply_source(viewport);
 
-   PDB("send destination_changed: transform(%d) x(%d) y(%d) w(%d) h(%d)",
-       rtransform, rrect.x, rrect.y, rrect.w, rrect.h);
+        if (changed || src_changed)
+          {
+             e_comp_wl_map_size_cal_from_buffer(viewport->ec);
+             e_comp_wl_map_size_cal_from_viewport(viewport->ec);
+             e_comp_wl_map_apply(viewport->ec);
 
-   tizen_viewport_send_destination_changed(viewport->resource, rtransform,
-                                           rrect.x, rrect.y, rrect.w, rrect.h);
+             if (changed)
+               {
+                  PDB("send destination_changed: transform(%d) x(%d) y(%d) w(%d) h(%d)",
+                      rtransform, rrect.x, rrect.y, rrect.w, rrect.h);
+                  tizen_viewport_send_destination_changed(viewport->resource, rtransform,
+                                                          rrect.x, rrect.y, rrect.w, rrect.h);
+               }
+          }
+     }
+
+   EINA_LIST_FOREACH(ec->comp_data->sub.list, l, subc)
+     _e_devicemgr_viewport_apply(subc);
+
+   EINA_LIST_FOREACH(ec->comp_data->sub.below_list, l, subc)
+     _e_devicemgr_viewport_apply(subc);
 
    return EINA_TRUE;
 }
@@ -1381,7 +1438,7 @@ _e_devicemgr_viewport_cb_apply_viewport(struct wl_listener *listener, void *data
 
    PDB("apply");
 
-   if (!_e_devicemgr_viewport_apply(ec))
+   if (!_e_devicemgr_viewport_apply(viewport->topmost))
      {
         PER("failed to apply tizen_viewport");
         return;
@@ -1416,7 +1473,7 @@ _e_devicemgr_viewport_cb_topmost_show(void *data, Evas *e EINA_UNUSED, Evas_Obje
    E_Viewport *viewport = data;
 
    PDB("show start");
-   _e_devicemgr_viewport_apply(viewport->ec);
+   _e_devicemgr_viewport_apply(viewport->topmost);
    PDB("show end");
 }
 
@@ -1426,7 +1483,7 @@ _e_devicemgr_viewport_cb_topmost_resize(void *data, Evas *e EINA_UNUSED, Evas_Ob
    E_Viewport *viewport = data;
 
    PDB("resize start");
-   _e_devicemgr_viewport_apply(viewport->ec);
+   _e_devicemgr_viewport_apply(viewport->topmost);
    PDB("resize end");
 }
 
@@ -1436,7 +1493,7 @@ _e_devicemgr_viewport_cb_topmost_move(void *data, Evas *e EINA_UNUSED, Evas_Obje
    E_Viewport *viewport = data;
 
    PDB("move start");
-   _e_devicemgr_viewport_apply(viewport->ec);
+   _e_devicemgr_viewport_apply(viewport->topmost);
    PDB("move end");
 }
 
@@ -1450,7 +1507,7 @@ _e_devicemgr_viewport_cb_topmost_rotate(void *data, int type, void *event)
       return ECORE_CALLBACK_PASS_ON;
 
    PDB("rorate start");
-   _e_devicemgr_viewport_apply(viewport->ec);
+   _e_devicemgr_viewport_apply(viewport->topmost);
    PDB("rorate end");
 
    return ECORE_CALLBACK_PASS_ON;
@@ -1597,11 +1654,22 @@ _e_devicemgr_viewport_print(void *data, const char *log_path)
         if (!name)
           name = "NO NAME";
 
-        fprintf(log_fl, "* WinID: 0x%08"PRIxPTR" '%s'\n", win, name);
+        fprintf(log_fl, "* WinID: 0x%08"PRIxPTR" '%s'", win, name);
+        if (viewport->epc)
+          {
+             win = e_client_util_win_get(viewport->epc);
+             fprintf(log_fl, " (parentID: 0x%08"PRIxPTR")\n", win);
+          }
+        else
+          fprintf(log_fl, "\n");
         if (viewport->transform > 0)
           fprintf(log_fl, "\t  transform: %d%s\n",
                   (4 - (viewport->transform & 3)) * 90 % 360,
                   (viewport->transform & 4) ? "(flipped)" : "");
+        if (viewport->follow_parent_transform)
+          fprintf(log_fl, "\t     follow: parent's transform %d%s\n",
+                  (4 - (viewport->parent_transform & 3)) * 90 % 360,
+                  (viewport->parent_transform & 4) ? "(flipped)" : "");
         if (viewport->source.w != -1)
           fprintf(log_fl, "\t     source: %dx%d+%d+%d\n",
                   viewport->source.w, viewport->source.h,
