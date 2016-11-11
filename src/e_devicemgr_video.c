@@ -266,7 +266,7 @@ _e_video_is_visible(E_Video *video)
 
    if (e_object_is_del(E_OBJECT(video->ec))) return EINA_FALSE;
 
-   if (video->ec->comp_data->sub.data || video->ec->comp_data->sub.data->stand_alone)
+   if (video->ec->comp_data->sub.data && video->ec->comp_data->sub.data->stand_alone)
       return EINA_TRUE;
 
    offscreen_parent = find_offscreen_parent_get(video->ec);
