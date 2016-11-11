@@ -595,7 +595,7 @@ _e_eom_output_show(E_EomOutputPtr eom_output, tbm_surface_h tbm_srfc,
    E_EomOutputBufferPtr outbuff = _e_eom_output_buff_create(eom_output, tbm_srfc, cb_func, cb_user_data);
    EINA_SAFETY_ON_NULL_RETURN_VAL(outbuff, EINA_FALSE);
 
-   /* chack if output free to commit */
+   /* check if output free to commit */
    if (eom_output->wait_buff == NULL) /* do commit */
      {
         EOMDB("========================>  CM  START   tbm_buff:%p", tbm_srfc);
@@ -984,11 +984,11 @@ _e_eom_output_start_mirror(E_EomOutputPtr eom_output)
    EINA_SAFETY_ON_FALSE_GOTO(tdm_err == TDM_ERROR_NONE, err);
 
    EOMDB("layer info: %dx%d, pos (x:%d, y:%d, w:%d, h:%d,  dpos (x:%d, y:%d, w:%d, h:%d))",
-           layer_info.src_config.size.h,  layer_info.src_config.size.v,
-           layer_info.src_config.pos.x, layer_info.src_config.pos.y,
-           layer_info.src_config.pos.w, layer_info.src_config.pos.h,
-           layer_info.dst_pos.x, layer_info.dst_pos.y,
-           layer_info.dst_pos.w, layer_info.dst_pos.h);
+         layer_info.src_config.size.h,  layer_info.src_config.size.v,
+         layer_info.src_config.pos.x, layer_info.src_config.pos.y,
+         layer_info.src_config.pos.w, layer_info.src_config.pos.h,
+         layer_info.dst_pos.x, layer_info.dst_pos.y,
+         layer_info.dst_pos.w, layer_info.dst_pos.h);
 
    eom_output->layer = hal_layer;
 
@@ -1025,11 +1025,11 @@ _e_eom_output_start_presentation(E_EomOutputPtr eom_output)
    EINA_SAFETY_ON_FALSE_GOTO(tdm_err == TDM_ERROR_NONE, err);
 
    EOMDB("layer info: %dx%d, pos (x:%d, y:%d, w:%d, h:%d,  dpos (x:%d, y:%d, w:%d, h:%d))",
-           layer_info.src_config.size.h,  layer_info.src_config.size.v,
-           layer_info.src_config.pos.x, layer_info.src_config.pos.y,
-           layer_info.src_config.pos.w, layer_info.src_config.pos.h,
-           layer_info.dst_pos.x, layer_info.dst_pos.y,
-           layer_info.dst_pos.w, layer_info.dst_pos.h);
+         layer_info.src_config.size.h,  layer_info.src_config.size.v,
+         layer_info.src_config.pos.x, layer_info.src_config.pos.y,
+         layer_info.src_config.pos.w, layer_info.src_config.pos.h,
+         layer_info.dst_pos.x, layer_info.dst_pos.y,
+         layer_info.dst_pos.w, layer_info.dst_pos.h);
 
    eom_output->layer = hal_layer;
 
@@ -1914,7 +1914,11 @@ _e_eom_window_set_internal(struct wl_resource *resource, int output_id, E_Client
    EINA_SAFETY_ON_NULL_RETURN(eom_client);
 
    eom_output = _e_eom_output_get_by_id(output_id);
-   EINA_SAFETY_ON_NULL_RETURN(eom_output);
+   if (eom_output == NULL)
+     {
+        wl_eom_send_output_set_window(resource, output_id, WL_EOM_ERROR_NO_OUTPUT);
+        return;
+     }
 
    ret = _e_eom_util_add_comp_object_redirected_hook(ec);
    EINA_SAFETY_ON_FALSE_RETURN(ret == EINA_TRUE);
@@ -1927,12 +1931,6 @@ _e_eom_window_set_internal(struct wl_resource *resource, int output_id, E_Client
 
 /* ec is used in buffer_change callback for distinguishing external ec and its buffers */
    eom_client->ec = ec;
-
-   if (eom_output->status == TDM_OUTPUT_CONN_STATUS_DISCONNECTED)
-     {
-        wl_eom_send_output_set_window(resource, eom_output->id, WL_EOM_ERROR_NO_OUTPUT);
-        return;
-     }
 
    if (eom_client->current == EINA_TRUE)
      wl_eom_send_output_set_window(resource, eom_output->id, WL_EOM_ERROR_NONE);
