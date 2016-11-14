@@ -1156,7 +1156,7 @@ _e_devicemgr_viewport_apply_transform(E_Viewport *viewport, int *rtransform)
    E_Client *ec = viewport->ec;
    E_Comp_Wl_Buffer_Viewport *vp = &ec->comp_data->scaler.buffer_viewport;
    Eina_Bool changed = EINA_FALSE;
-   int new_transform;
+   unsigned int new_transform;
 
    new_transform = viewport->transform;
 
@@ -1164,7 +1164,7 @@ _e_devicemgr_viewport_apply_transform(E_Viewport *viewport, int *rtransform)
      {
         E_Client *epc = viewport->epc;
         E_Comp_Wl_Buffer_Viewport *vpp;
-        unsigned int parent_transform;
+        unsigned int pwtran, ptran, pflip, ctran, cflip;
 
         if (!epc->comp_data || e_object_is_del(E_OBJECT(epc)))
           {
@@ -1177,21 +1177,15 @@ _e_devicemgr_viewport_apply_transform(E_Viewport *viewport, int *rtransform)
         PDB("parent's transform(%d) rot.ang.curr(%d)",
             vpp->buffer.transform, epc->e.state.rot.ang.curr/90);
 
-        parent_transform = (epc->e.state.rot.ang.curr / 90) + vpp->buffer.transform;
-        viewport->parent_transform = parent_transform;
+        pwtran = ((epc->e.state.rot.ang.curr + 360) % 360) / 90;
 
-        if (parent_transform >= WL_OUTPUT_TRANSFORM_FLIPPED)
-          PER("need to use matrix to calculate the correct destination in this case");
+        ptran = ((pwtran & 0x3) + (vpp->buffer.transform & 0x3)) & 0x3;
+        pflip = (vpp->buffer.transform & 0x4);
 
-        if (new_transform < WL_OUTPUT_TRANSFORM_FLIPPED)
-          new_transform = (parent_transform + new_transform) % 4;
-        else
-          {
-             if (parent_transform % 2)
-               new_transform = (4 - parent_transform + new_transform) % 4 + 4;
-             else
-               new_transform = (parent_transform + new_transform) % 4 + 4;
-          }
+        ctran = (viewport->transform & 0x3);
+        cflip = (viewport->transform & 0x4);
+
+        new_transform = ((ptran + ctran) & 0x3) + ((pflip + cflip) & 0x4);
      }
 
    if (new_transform != vp->buffer.transform)
@@ -1664,12 +1658,12 @@ _e_devicemgr_viewport_print(void *data, const char *log_path)
           fprintf(log_fl, "\n");
         if (viewport->transform > 0)
           fprintf(log_fl, "\t  transform: %d%s\n",
-                  (4 - (viewport->transform & 3)) * 90 % 360,
-                  (viewport->transform & 4) ? "(flipped)" : "");
+                  (viewport->transform & 0x3) * 90 % 360,
+                  (viewport->transform & 0x4) ? "(flipped)" : "");
         if (viewport->follow_parent_transform)
           fprintf(log_fl, "\t     follow: parent's transform %d%s\n",
-                  (4 - (viewport->parent_transform & 3)) * 90 % 360,
-                  (viewport->parent_transform & 4) ? "(flipped)" : "");
+                  (viewport->parent_transform & 0x3) * 90 % 360,
+                  (viewport->parent_transform & 0x4) ? "(flipped)" : "");
         if (viewport->source.w != -1)
           fprintf(log_fl, "\t     source: %dx%d+%d+%d\n",
                   viewport->source.w, viewport->source.h,
