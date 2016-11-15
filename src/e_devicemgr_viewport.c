@@ -80,7 +80,6 @@ typedef struct _E_Viewport {
    Eina_Rectangle parent_size;
 
    Eina_Bool follow_parent_transform;
-   unsigned int parent_transform;
 } E_Viewport;
 
 static E_Viewport* _e_devicemgr_viewport_get_viewport(struct wl_resource *resource);
@@ -1661,9 +1660,7 @@ _e_devicemgr_viewport_print(void *data, const char *log_path)
                   (viewport->transform & 0x3) * 90 % 360,
                   (viewport->transform & 0x4) ? "(flipped)" : "");
         if (viewport->follow_parent_transform)
-          fprintf(log_fl, "\t     follow: parent's transform %d%s\n",
-                  (viewport->parent_transform & 0x3) * 90 % 360,
-                  (viewport->parent_transform & 0x4) ? "(flipped)" : "");
+          fprintf(log_fl, "\t     follow: parent's transform\n");
         if (viewport->source.w != -1)
           fprintf(log_fl, "\t     source: %dx%d+%d+%d\n",
                   viewport->source.w, viewport->source.h,
