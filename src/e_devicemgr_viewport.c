@@ -200,7 +200,7 @@ _e_devicemgr_viewport_parent_check(E_Viewport *viewport)
 
    viewport->epc = new_parent;
 
-   PDB("epc(%p)", viewport->epc);
+   PIN("epc(%p)", viewport->epc);
 
    if (!viewport->epc) return;
 
@@ -232,7 +232,7 @@ _e_devicemgr_viewport_topmost_check(E_Viewport *viewport)
      }
 
    viewport->topmost = new_topmost;
-   PDB("topmost(%p)", viewport->topmost);
+   PIN("topmost(%p)", viewport->topmost);
 
    evas_object_event_callback_add(viewport->topmost->frame, EVAS_CALLBACK_SHOW,
                                   _e_devicemgr_viewport_cb_topmost_show, viewport);
@@ -275,7 +275,7 @@ _e_devicemgr_destination_mode_cb_follow_parent_transform(struct wl_client *clien
    if (viewport->follow_parent_transform)
      return;
 
-   PDB("follow_parent_transform");
+   PIN("follow_parent_transform");
 
    viewport->follow_parent_transform = EINA_TRUE;
    viewport->changed = EINA_TRUE;
@@ -292,7 +292,7 @@ _e_devicemgr_destination_mode_cb_unfollow_parent_transform(struct wl_client *cli
    if (!viewport->follow_parent_transform)
      return;
 
-   PDB("unfollow_parent_transform");
+   PIN("unfollow_parent_transform");
 
    viewport->follow_parent_transform = EINA_FALSE;
    viewport->changed = EINA_TRUE;
@@ -319,7 +319,7 @@ _e_devicemgr_destination_mode_cb_set(struct wl_client *client,
    if (viewport->destination.mode.type == type)
      return;
 
-   PDB("type(%d)", type);
+   PIN("type(%d)", type);
 
    viewport->destination.mode.type = type;
    viewport->changed = EINA_TRUE;
@@ -357,7 +357,7 @@ _e_devicemgr_destination_mode_cb_set_ratio(struct wl_client *client,
        viewport->destination.mode.ratio_v == ratio_v)
      return;
 
-   PDB("ratio_h(%.2f) ratio_v(%.2f)", ratio_h, ratio_v);
+   PIN("ratio_h(%.2f) ratio_v(%.2f)", ratio_h, ratio_v);
 
    viewport->destination.mode.ratio_h = ratio_h;
    viewport->destination.mode.ratio_v = ratio_v;
@@ -396,7 +396,7 @@ _e_devicemgr_destination_mode_cb_set_scale(struct wl_client *client,
        viewport->destination.mode.scale_v == scale_v)
      return;
 
-   PDB("scale_h(%.2f) scale_v(%.2f)", scale_h, scale_v);
+   PIN("scale_h(%.2f) scale_v(%.2f)", scale_h, scale_v);
 
    viewport->destination.mode.scale_h = scale_h;
    viewport->destination.mode.scale_v = scale_v;
@@ -439,7 +439,7 @@ _e_devicemgr_destination_mode_cb_set_align(struct wl_client *client,
        viewport->destination.mode.align_v == align_v)
      return;
 
-   PDB("align_h(%.2f) align_v(%.2f)", align_h, align_v);
+   PIN("align_h(%.2f) align_v(%.2f)", align_h, align_v);
 
    viewport->destination.mode.align_h = align_h;
    viewport->destination.mode.align_v = align_v;
@@ -464,7 +464,7 @@ _e_devicemgr_destination_mode_cb_set_offset(struct wl_client *client,
        viewport->destination.mode.offset_h == h)
      return;
 
-   PDB("offset_x(%d) offset_y(%d) offset_w(%d) offset_h(%d)", x, y, w, h);
+   PIN("offset_x(%d) offset_y(%d) offset_w(%d) offset_h(%d)", x, y, w, h);
 
    viewport->destination.mode.offset_x = x;
    viewport->destination.mode.offset_y = y;
@@ -544,7 +544,7 @@ _e_devicemgr_viewport_cb_set_transform(struct wl_client *client EINA_UNUSED,
    if (viewport->transform == transform)
      return;
 
-   PDB("transform(%d)", transform);
+   PIN("transform(%d)", transform);
 
    viewport->transform = transform;
    viewport->changed = EINA_TRUE;
@@ -576,7 +576,7 @@ _e_devicemgr_viewport_cb_set_source(struct wl_client *client EINA_UNUSED,
    viewport->cropped_source = viewport->source;
    viewport->changed = EINA_TRUE;
 
-   PDB("source(%d,%d %dx%d)", EINA_RECTANGLE_ARGS(&viewport->source));
+   PIN("source(%d,%d %dx%d)", EINA_RECTANGLE_ARGS(&viewport->source));
 }
 
 static void
@@ -606,13 +606,13 @@ _e_devicemgr_viewport_cb_set_destination(struct wl_client *client EINA_UNUSED,
    if (viewport->topmost == viewport->ec)
      x = y = 0;
 
-   PDB("destination.rect(%d,%d %dx%d)", x, y, width, height);
-
    viewport->type = DESTINATION_TYPE_RECT;
 
    if (viewport->destination.rect.x == x && viewport->destination.rect.y == y &&
        viewport->destination.rect.w == width && viewport->destination.rect.h == height)
      return;
+
+   PIN("destination.rect(%d,%d %dx%d)", x, y, width, height);
 
    viewport->destination.rect.x = x;
    viewport->destination.rect.y = y;
@@ -655,12 +655,13 @@ _e_devicemgr_viewport_cb_set_destination_ratio(struct wl_client *client EINA_UNU
         return;
      }
 
-   PDB("destination.ratio(%.2f,%.2f %.2fx%.2f)", ratio_x, ratio_y, ratio_w, ratio_h);
    viewport->type = DESTINATION_TYPE_RATIO;
 
    if (viewport->destination.ratio.x == ratio_x && viewport->destination.ratio.y == ratio_y &&
        viewport->destination.ratio.w == ratio_w && viewport->destination.ratio.h == ratio_h)
      return;
+
+   PIN("destination.ratio(%.2f,%.2f %.2fx%.2f)", ratio_x, ratio_y, ratio_w, ratio_h);
 
    viewport->destination.ratio.x = ratio_x;
    viewport->destination.ratio.y = ratio_y;
@@ -768,7 +769,7 @@ _e_devicemgr_viewport_cb_follow_parent_transform(struct wl_client *client EINA_U
    if (viewport->follow_parent_transform)
      return;
 
-   PDB("follow_parent_transform");
+   PIN("follow_parent_transform");
 
    viewport->follow_parent_transform = EINA_TRUE;
    viewport->changed = EINA_TRUE;
@@ -788,7 +789,7 @@ _e_devicemgr_viewport_cb_unfollow_parent_transform(struct wl_client *client EINA
    if (!viewport->follow_parent_transform)
      return;
 
-   PDB("unfollow_parent_transform");
+   PIN("unfollow_parent_transform");
 
    viewport->follow_parent_transform = EINA_FALSE;
    viewport->changed = EINA_TRUE;
@@ -1303,9 +1304,10 @@ _e_devicemgr_viewport_apply_transform(E_Viewport *viewport, int *rtransform)
           ec->comp_data->sub.data->cached.buffer_viewport = *vp;
      }
 
-   PDB("apply transform: %d type(%d) follow(%d) changed(%d)",
-       vp->buffer.transform, viewport->type,
-       viewport->follow_parent_transform, changed);
+   if (changed)
+     PIN("apply transform: %d type(%d) follow(%d) changed(%d)",
+         vp->buffer.transform, viewport->type,
+         viewport->follow_parent_transform, changed);
 
    *rtransform = vp->buffer.transform;
 
@@ -1403,7 +1405,8 @@ _e_devicemgr_viewport_apply_destination(E_Viewport *viewport, Eina_Rectangle *rr
 
    *rrect = dst;
 
-   PDB("apply destination: %d,%d %dx%d changed(%d)", EINA_RECTANGLE_ARGS(&dst), changed);
+   if (changed)
+     PIN("apply destination: %d,%d %dx%d changed(%d)", EINA_RECTANGLE_ARGS(&dst), changed);
 
    return changed;
 }
@@ -1453,8 +1456,9 @@ _e_devicemgr_viewport_apply_source(E_Viewport *viewport)
           ec->comp_data->sub.data->cached.buffer_viewport = *vp;
      }
 
-   PDB("apply source: %d,%d %dx%d orig(%d,%d %dx%d) changed(%d)",
-       EINA_RECTANGLE_ARGS(&rect), EINA_RECTANGLE_ARGS(&viewport->cropped_source), changed);
+   if (changed)
+     PDB("apply source: %d,%d %dx%d orig(%d,%d %dx%d) changed(%d)",
+         EINA_RECTANGLE_ARGS(&rect), EINA_RECTANGLE_ARGS(&viewport->cropped_source), changed);
 
    return changed;
 }
@@ -1483,8 +1487,6 @@ _e_devicemgr_viewport_apply(E_Client *ec)
         Eina_Rectangle rrect = {0,};
         int rtransform = 0;
 
-        PDB("apply");
-
         changed |= _e_devicemgr_viewport_apply_transform(viewport, &rtransform);
         changed |= _e_devicemgr_viewport_apply_destination(viewport, &rrect);
         src_changed |= _e_devicemgr_viewport_apply_source(viewport);
@@ -1497,7 +1499,7 @@ _e_devicemgr_viewport_apply(E_Client *ec)
 
              if (changed)
                {
-                  PDB("send destination_changed: transform(%d) x(%d) y(%d) w(%d) h(%d)",
+                  PIN("send destination_changed: transform(%d) x(%d) y(%d) w(%d) h(%d)",
                       rtransform, rrect.x, rrect.y, rrect.w, rrect.h);
                   tizen_viewport_send_destination_changed(viewport->resource, rtransform,
                                                           rrect.x, rrect.y, rrect.w, rrect.h);
@@ -1530,10 +1532,7 @@ _e_devicemgr_viewport_cb_apply_viewport(struct wl_listener *listener, void *data
    E_Comp_Wl_Buffer_Viewport *vp = &ec->comp_data->scaler.buffer_viewport;
 
    if (vp->changed)
-     {
-        PWR("The client seems to use wl_viewport interface. Ignore it.");
-        viewport->changed = EINA_TRUE;
-     }
+     viewport->changed = EINA_TRUE;
 
    _e_devicemgr_viewport_parent_check(viewport);
    _e_devicemgr_viewport_topmost_check(viewport);
@@ -1831,6 +1830,8 @@ e_devicemgr_viewport_init(void)
         SLOG(LOG_DEBUG, "DEVICEMGR", "[e_devicemgr][%s] Failed @ eina_log_domain_register()..!\n", __FUNCTION__);
         return 0;
      }
+
+   eina_log_domain_level_set("e-devicemgr-viewport", EINA_LOG_LEVEL_INFO);
 
    return 1;
 }
