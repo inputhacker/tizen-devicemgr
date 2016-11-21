@@ -303,7 +303,7 @@ _e_devmgr_buffer_create_comp(E_Comp_Wl_Buffer *comp_buffer, const char *func)
    mbuf->comp_buffer = comp_buffer;
 
    mbuf->destroy_listener.notify = _e_devmgr_buffer_cb_destroy;
-   wl_signal_add(&comp_buffer->destroy_signal, &mbuf->destroy_listener);
+   wl_resource_add_destroy_listener(comp_buffer->resource, &mbuf->destroy_listener);
 
    return mbuf;
 }
@@ -618,8 +618,14 @@ static void
 _e_devmgr_buffer_cb_destroy(struct wl_listener *listener, void *data)
 {
    E_Devmgr_Buf *mbuf = container_of(listener, E_Devmgr_Buf, destroy_listener);
+
+   mbuf->comp_buffer = NULL;
+
    if (mbuf && (mbuf->buffer_destroying == EINA_FALSE))
-     e_devmgr_buffer_free(mbuf);
+     {
+       mbuf->destroy_listener.notify = NULL;
+       e_devmgr_buffer_free(mbuf);
+     }
 }
 
 void
