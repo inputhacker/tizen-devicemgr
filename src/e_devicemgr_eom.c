@@ -32,6 +32,7 @@
 #define EOM_NUM_ATTR 3
 #define EOM_CONNECT_CHECK_TIMEOUT 7.0
 #define EOM_DELAY_CHECK_TIMEOUT 4.0
+#define EOM_ROTATE_DELAY_TIMEOUT 0.4
 
 typedef struct _E_Eom E_Eom, *E_EomPtr;
 typedef struct _E_Eom_Out_Mode E_EomOutMode, *E_EomOutModePtr;
@@ -48,6 +49,14 @@ typedef enum {
    PRESENTATION,
    WAIT_PRESENTATION,    /* It is used for delayed runnig of Presentation mode */
 } E_EomOutputState;
+
+typedef enum {
+   ROTATE_NONE,
+   ROTATE_INIT,
+   ROTATE_PENDING,
+   ROTATE_CANCEL,
+   ROTATE_DONE
+} E_EomOutputRotate;
 
 struct _E_Eom
 {
@@ -74,7 +83,9 @@ struct _E_Eom
 
    /* Rotation data */
    int angle; /* 0, 90, 180, 270 */
-   Eina_Bool pending_rotate;
+   E_EomOutputRotate rotate_state;
+   E_EomOutput *rotate_output;
+   Ecore_Timer *rotate_timer;
 };
 
 struct _E_Eom_Output
@@ -743,6 +754,55 @@ void _e_eom_clear_surfaces(E_EomOutputPtr eom_output, tbm_surface_queue_h queue)
      }
 }
 
+static E_Client *
+_e_eom_top_visible_ec_get()
+{
+   E_Client *ec;
+   Evas_Object *o;
+   E_Comp_Wl_Client_Data *cdata;
+
+   for (o = evas_object_top_get(e_comp->evas); o; o = evas_object_below_get(o))
+     {
+        ec = evas_object_data_get(o, "E_Client");
+
+        /* check e_client and skip e_clients not intersects with zone */
+        if (!ec) continue;
+        if (e_object_is_del(E_OBJECT(ec))) continue;
+        if (e_client_util_ignored_get(ec)) continue;
+        if (ec->iconic) continue;
+        if (ec->visible == 0) continue;
+        if (!(ec->visibility.obscured == 0 || ec->visibility.obscured == 1)) continue;
+        if (!ec->frame) continue;
+        if (!evas_object_visible_get(ec->frame)) continue;
+        /* if ec is subsurface, skip this */
+        cdata = (E_Comp_Wl_Client_Data *)ec->comp_data;
+        if (cdata && cdata->sub.data) continue;
+
+        return ec;
+     }
+
+   return NULL;
+}
+
+static Eina_Bool
+_e_eom_pp_rotate_check()
+{
+   E_Client *ec;
+
+   ec = _e_eom_top_visible_ec_get();
+   if (ec == NULL)
+     return EINA_FALSE;
+
+   if (g_eom->angle != ec->e.state.rot.ang.curr)
+     {
+        g_eom->angle = ec->e.state.rot.ang.curr;
+        EOMDB("rotate check: rotate angle:%d", g_eom->angle);
+        return EINA_TRUE;
+     }
+
+   return EINA_FALSE;
+}
+
 static void
 _e_eom_pp_run(E_EomOutputPtr eom_output, Eina_Bool first_run)
 {
@@ -756,10 +816,24 @@ _e_eom_pp_run(E_EomOutputPtr eom_output, Eina_Bool first_run)
 
    /* If a client has committed its buffer stop mirror mode */
    if (eom_output->state != MIRROR)
-     return;
+     {
+        g_eom->rotate_state = ROTATE_NONE;
+        g_eom->rotate_output = NULL;
+        return;
+     }
 
    if (!eom_output->pp || !eom_output->pp_queue)
      return;
+
+   if (g_eom->rotate_state == ROTATE_INIT || g_eom->rotate_state == ROTATE_PENDING)
+     {
+        g_eom->rotate_output = eom_output;
+        if (!first_run)
+          return;
+     }
+
+   if (g_eom->rotate_state == ROTATE_CANCEL)
+     g_eom->rotate_state = ROTATE_NONE;
 
    if (tbm_surface_queue_can_dequeue(eom_output->pp_queue, 0) )
      {
@@ -773,9 +847,10 @@ _e_eom_pp_run(E_EomOutputPtr eom_output, Eina_Bool first_run)
         EINA_SAFETY_ON_NULL_GOTO(src_surface, error);
 
         /* Is set to TRUE if device has been recently rotated */
-        if (g_eom->pending_rotate || first_run)
+        if (g_eom->rotate_state == ROTATE_DONE || first_run || _e_eom_pp_rotate_check())
           {
-             g_eom->pending_rotate = EINA_FALSE;
+             g_eom->rotate_state = ROTATE_NONE;
+             g_eom->rotate_output = NULL;
 
              /* TODO: it has to be implemented in better way */
              _e_eom_clear_surfaces(eom_output, eom_output->pp_queue);
@@ -1270,6 +1345,14 @@ _e_eom_output_disconnected(E_EomOutputPtr eom_output)
    if (eom_output->watchdog)
      ecore_timer_del(eom_output->watchdog);
 
+   if (g_eom->rotate_output == eom_output)
+     {
+        if (g_eom->rotate_timer)
+          ecore_timer_del(g_eom->rotate_timer);
+        g_eom->rotate_timer = NULL;
+        g_eom->rotate_output = NULL;
+     }
+
    /* update eom_output disconnect */
    eom_output->width = 0;
    eom_output->height = 0;
@@ -1633,6 +1716,19 @@ _e_eom_output_hide_layers(E_EomOutputPtr eom_output)
 }
 
 static void
+_e_eom_top_ec_angle_get(void)
+{
+   E_Client *ec;
+
+   ec = _e_eom_top_visible_ec_get();
+   if (ec)
+     {
+        g_eom->angle = ec->e.state.rot.ang.curr;
+        EOMDB("top ec rotate angle:%d", g_eom->angle);
+     }
+}
+
+static void
 _e_eom_cb_wl_eom_client_destory(struct wl_resource *resource)
 {
    E_EomClientPtr client = NULL, iterator = NULL;
@@ -1670,6 +1766,7 @@ _e_eom_cb_wl_eom_client_destory(struct wl_resource *resource)
    /* If a client has been disconnected and mirror mode has not
     * been restored, start mirror mode
     */
+   _e_eom_top_ec_angle_get();
    _e_eom_output_start_mirror(output);
 
 end:
@@ -1843,7 +1940,6 @@ _e_eom_cb_comp_object_redirected(void *data, E_Client *ec)
 {
    E_EomCompObjectInterceptHookData *hook_data;
 
-   EOMDB("_e_eom_cb_comp_object_redirected");
    EINA_SAFETY_ON_NULL_RETURN_VAL(data, EINA_TRUE);
 
    hook_data = (E_EomCompObjectInterceptHookData* )data;
@@ -2322,6 +2418,94 @@ _e_eom_cb_client_buffer_change(void *data, int type, void *event)
 }
 
 static Eina_Bool
+_e_eom_cb_rotation_effect_ready(void *data, int type, void *event)
+{
+   E_EomPtr eom = NULL;
+
+   EINA_SAFETY_ON_NULL_RETURN_VAL(data, ECORE_CALLBACK_PASS_ON);
+   EINA_SAFETY_ON_NULL_RETURN_VAL(event, ECORE_CALLBACK_PASS_ON);
+
+   eom = data;
+
+   eom->rotate_state = ROTATE_INIT;
+
+   return ECORE_CALLBACK_PASS_ON;
+}
+
+static Eina_Bool
+_e_eom_rotate(void *data)
+{
+   g_eom->rotate_state = ROTATE_DONE;
+
+   _e_eom_top_ec_angle_get();
+
+   if (g_eom->rotate_output)
+     _e_eom_pp_run(g_eom->rotate_output, EINA_FALSE);
+
+   g_eom->rotate_timer = NULL;
+
+   return ECORE_CALLBACK_CANCEL;
+}
+
+static Eina_Bool
+_e_eom_cb_rotation_effect_cancel(void *data, int type, void *event)
+{
+   E_EomPtr eom = NULL;
+
+   EINA_SAFETY_ON_NULL_RETURN_VAL(data, ECORE_CALLBACK_PASS_ON);
+   EINA_SAFETY_ON_NULL_RETURN_VAL(event, ECORE_CALLBACK_PASS_ON);
+
+   eom = data;
+
+   eom->rotate_state = ROTATE_CANCEL;
+
+   if (eom->rotate_timer)
+     ecore_timer_del(eom->rotate_timer);
+
+   if (g_eom->rotate_output)
+     eom->rotate_timer = ecore_timer_add(EOM_ROTATE_DELAY_TIMEOUT, _e_eom_rotate, NULL);
+
+   return ECORE_CALLBACK_PASS_ON;
+}
+
+static Eina_Bool
+_e_eom_cb_rotation_effect_done(void *data, int type, void *event)
+{
+   E_Event_Zone_Rotation_Effect_Done *ev;
+   E_EomPtr eom = NULL;
+   E_Zone *zone;
+
+   EINA_SAFETY_ON_NULL_RETURN_VAL(data, ECORE_CALLBACK_PASS_ON);
+   EINA_SAFETY_ON_NULL_RETURN_VAL(event, ECORE_CALLBACK_PASS_ON);
+
+   ev = event;
+   eom = data;
+
+   zone = ev->zone;
+   EINA_SAFETY_ON_NULL_RETURN_VAL(zone, ECORE_CALLBACK_PASS_ON);
+
+   EOMDB("-----------------------------------------------------");
+
+   EOMDB("effect END: angles: prev:%d  curr:%d  next:%d  sub:%d",
+          zone->rot.prev, zone->rot.curr,
+          zone->rot.next, zone->rot.sub);
+
+   EOMDB("effect END: rotate angle:%d", eom->angle);
+
+   EOMDB("-----------------------------------------------------");
+
+   eom->angle = zone->rot.curr;
+
+   if (eom->rotate_timer)
+     ecore_timer_del(eom->rotate_timer);
+
+   if (g_eom->rotate_output)
+     eom->rotate_timer = ecore_timer_add(EOM_ROTATE_DELAY_TIMEOUT, _e_eom_rotate, NULL);
+
+   return ECORE_CALLBACK_PASS_ON;
+}
+
+static Eina_Bool
 _e_eom_cb_rotation_end(void *data, int evtype EINA_UNUSED, void *event)
 {
    E_Client *ec = NULL;
@@ -2344,20 +2528,28 @@ _e_eom_cb_rotation_end(void *data, int evtype EINA_UNUSED, void *event)
    if (eom->angle == ec->e.state.rot.ang.curr)
      return ECORE_CALLBACK_PASS_ON;
 
-   eom->angle = ec->e.state.rot.ang.curr;
-   eom->pending_rotate = EINA_TRUE;
+   if (eom->rotate_state == ROTATE_NONE)
+     {
+        eom->angle = ec->e.state.rot.ang.curr;
+        eom->rotate_state = ROTATE_DONE;
 
-   EOMDB("-----------------------------------------------------");
-   EOMDB("END: ec:%p", ec);
+        EOMDB("-----------------------------------------------------");
+        EOMDB("END: ec:%p", ec);
 
-   EOMDB("END: angles: prev:%d  curr:%d  next:%d  res:%d",
-          ec->e.state.rot.ang.prev, ec->e.state.rot.ang.curr,
-          ec->e.state.rot.ang.next, ec->e.state.rot.ang.reserve);
+        EOMDB("END: angles: prev:%d  curr:%d  next:%d  res:%d",
+              ec->e.state.rot.ang.prev, ec->e.state.rot.ang.curr,
+              ec->e.state.rot.ang.next, ec->e.state.rot.ang.reserve);
 
-   EOMDB("END: rotate angle:%d", eom->angle);
-   EOMDB("END: ec:%dx%d", ec->w, ec->h);
+        EOMDB("END: rotate angle:%d", eom->angle);
+        EOMDB("END: ec:%dx%d", ec->w, ec->h);
 
-   EOMDB("-----------------------------------------------------");
+        EOMDB("-----------------------------------------------------");
+     }
+   else if (eom->rotate_state == ROTATE_INIT)
+     {
+        eom->angle = ec->e.state.rot.ang.curr;
+        eom->rotate_state = ROTATE_PENDING;
+     }
 
    return ECORE_CALLBACK_PASS_ON;
 }
@@ -2376,7 +2568,7 @@ _e_eom_init()
    EINA_SAFETY_ON_NULL_GOTO(g_eom->global, err);
 
    g_eom->angle = 0;
-   g_eom->pending_rotate = EINA_FALSE;
+   g_eom->rotate_state = ROTATE_NONE;
    g_eom->main_output_name = NULL;
 
    ret = _e_eom_init_internal();
@@ -2386,6 +2578,9 @@ _e_eom_init()
    E_LIST_HANDLER_APPEND(g_eom->handlers, ECORE_DRM_EVENT_OUTPUT, _e_eom_cb_ecore_drm_output, g_eom);
    E_LIST_HANDLER_APPEND(g_eom->handlers, E_EVENT_CLIENT_BUFFER_CHANGE, _e_eom_cb_client_buffer_change, NULL);
    /* TODO: add if def _F_ZONE_WINDOW_ROTATION_ */
+   E_LIST_HANDLER_APPEND(g_eom->handlers, E_EVENT_ZONE_ROTATION_EFFECT_READY, _e_eom_cb_rotation_effect_ready, g_eom);
+   E_LIST_HANDLER_APPEND(g_eom->handlers, E_EVENT_ZONE_ROTATION_EFFECT_CANCEL, _e_eom_cb_rotation_effect_cancel, g_eom);
+   E_LIST_HANDLER_APPEND(g_eom->handlers, E_EVENT_ZONE_ROTATION_EFFECT_DONE, _e_eom_cb_rotation_effect_done, g_eom);
    E_LIST_HANDLER_APPEND(g_eom->handlers, E_EVENT_CLIENT_ROTATION_CHANGE_END, _e_eom_cb_rotation_end, g_eom);
 
    return EINA_TRUE;
