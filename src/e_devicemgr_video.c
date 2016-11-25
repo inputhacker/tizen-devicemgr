@@ -266,6 +266,12 @@ _e_video_is_visible(E_Video *video)
 
    if (e_object_is_del(E_OBJECT(video->ec))) return EINA_FALSE;
 
+   if (!e_pixmap_resource_get(video->ec->pixmap))
+     {
+        VDB("no comp buffer");
+        return EINA_FALSE;
+     }
+
    if (video->ec->comp_data->sub.data && video->ec->comp_data->sub.data->stand_alone)
       return EINA_TRUE;
 
@@ -280,12 +286,6 @@ _e_video_is_visible(E_Video *video)
      {
          VDB("evas obj invisible");
          return EINA_FALSE;
-     }
-
-   if (!e_pixmap_resource_get(video->ec->pixmap))
-     {
-        VDB("no comp buffer");
-        return EINA_FALSE;
      }
 
    return EINA_TRUE;
