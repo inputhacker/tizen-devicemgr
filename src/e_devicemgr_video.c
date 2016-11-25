@@ -904,6 +904,12 @@ _e_video_geometry_cal(E_Video * video)
    output_r.x -= video->geo.output_r.x;
    output_r.y -= video->geo.output_r.y;
 
+   if (output_r.w <= 0 || output_r.h <= 0)
+     {
+        VER("output area is empty");
+        return EINA_FALSE;
+     }
+
    _e_video_geometry_cal_to_input_rect(video, &output_r, &input_r);
 
    VDB("output(%d,%d %dx%d) input(%d,%d %dx%d)",
