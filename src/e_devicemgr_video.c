@@ -473,6 +473,8 @@ _e_video_pp_buffer_get(E_Video *video, int width, int height)
 
              EINA_LIST_FOREACH_SAFE(video->pp_buffer_list, l, ll, mbuf)
                {
+                  tdm_buffer_remove_release_handler(mbuf->tbm_surface,
+                                                    _e_video_pp_buffer_cb_release, mbuf);
                   /* free forcely */
                   mbuf->in_use = EINA_FALSE;
                   e_devmgr_buffer_unref(mbuf);

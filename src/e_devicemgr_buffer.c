@@ -565,7 +565,7 @@ _e_devmgr_buffer_free(E_Devmgr_Buf *mbuf, const char *func)
 
    MBUF_RETURN_IF_FAIL(_e_devmgr_buffer_valid(mbuf, func));
 
-   BDB("mbuf(%p) freed: %s", mbuf, func);
+   BDB("mbuf(%p) tbm_surface(%p) freed: %s", mbuf, mbuf->tbm_surface, func);
 
    mbuf->buffer_destroying = EINA_TRUE;
 
