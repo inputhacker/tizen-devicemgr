@@ -1974,6 +1974,40 @@ _e_devicemgr_mbuf_print(void *data, const char *log_path)
    e_devmgr_buffer_list_print(log_path);
 }
 
+static void
+_e_devicemgr_video_dst_change(void *data, const char *log_path)
+{
+   Eina_List *video_list, *l;
+   E_Video *video;
+   static int i = -1;
+   int temp = 64;
+   video_list = e_devicemgr_video_list_get();
+
+   EINA_LIST_FOREACH(video_list, l, video)
+     {
+        E_Client *ec = video->ec;
+        E_Comp_Wl_Buffer_Viewport *vp = &ec->comp_data->scaler.buffer_viewport;
+
+        vp->changed = EINA_TRUE;
+
+        if (ec->comp_data->sub.data)
+          {
+             ec->comp_data->sub.data->position.x -= (temp * i);
+             ec->comp_data->sub.data->position.y -= (temp * i);
+             ec->comp_data->sub.data->position.set = EINA_TRUE;
+          }
+
+        vp->surface.width += (temp * i) * 2;
+        vp->surface.height += (temp * i) * 2;
+
+        e_comp_wl_map_size_cal_from_buffer(ec);
+        e_comp_wl_map_size_cal_from_viewport(ec);
+        e_comp_wl_map_apply(ec);
+     }
+
+   i *= -1;
+}
+
 int
 e_devicemgr_video_init(void)
 {
@@ -1981,6 +2015,7 @@ e_devicemgr_video_init(void)
    if (!e_comp_wl->wl.disp) return 0;
 
    e_info_server_hook_set("mbuf", _e_devicemgr_mbuf_print, NULL);
+   e_info_server_hook_set("video-dst-change", _e_devicemgr_video_dst_change, NULL);
 
    _video_detail_log_dom = eina_log_domain_register("e-devicemgr-video", EINA_COLOR_BLUE);
    if (_video_detail_log_dom < 0)
@@ -2013,7 +2048,8 @@ e_devicemgr_video_fini(void)
 {
    E_FREE_LIST(video_hdlrs, ecore_event_handler_del);
 
-   e_info_server_hook_set("mbuf_list", NULL, NULL);
+   e_info_server_hook_set("mbuf", NULL, NULL);
+   e_info_server_hook_set("video-dst-change", NULL, NULL);
 
    eina_log_domain_unregister(_video_detail_log_dom);
    _video_detail_log_dom = -1;
