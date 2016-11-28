@@ -619,9 +619,11 @@ _e_devmgr_buffer_cb_destroy(struct wl_listener *listener, void *data)
 {
    E_Devmgr_Buf *mbuf = container_of(listener, E_Devmgr_Buf, destroy_listener);
 
+   if (!mbuf) return;
+
    mbuf->comp_buffer = NULL;
 
-   if (mbuf && (mbuf->buffer_destroying == EINA_FALSE))
+   if (mbuf->buffer_destroying == EINA_FALSE)
      {
        mbuf->destroy_listener.notify = NULL;
        e_devmgr_buffer_free(mbuf);
