@@ -809,9 +809,9 @@ static const struct tizen_viewport_interface _e_devicemgr_viewport_interface =
 };
 
 static void
-_buffer_size_get(E_Pixmap *pixmap, int *bw, int *bh)
+_buffer_size_get(E_Client *ec, int *bw, int *bh)
 {
-   E_Comp_Wl_Buffer *buffer = e_pixmap_resource_get(pixmap);
+   E_Comp_Wl_Buffer *buffer = ec->comp_data->buffer_ref.buffer;
 
    *bw = *bh = 0;
 
@@ -986,7 +986,7 @@ _destination_mode_calculate_destination(E_Viewport *viewport, Eina_Rectangle *pr
         sh = viewport->source.h;
      }
    else
-     _buffer_size_get(ec->pixmap, &sw, &sh);
+     _buffer_size_get(ec, &sw, &sh);
 
    if (vp->buffer.transform % 2)
       SWAP(sw, sh);
@@ -1227,7 +1227,7 @@ _e_devicemgr_viewport_crop_by_parent(E_Viewport *viewport, Eina_Rectangle *paren
 
    PDB("  => (%d,%d %dx%d)", EINA_RECTANGLE_ARGS(dst));
 
-   _buffer_size_get(viewport->ec->pixmap, &bw, &bh);
+   _buffer_size_get(viewport->ec, &bw, &bh);
 
    if (viewport->source.w == -1)
      {
@@ -1349,7 +1349,7 @@ _e_devicemgr_viewport_apply_destination(E_Viewport *viewport, Eina_Rectangle *rr
              prect.h = vpp->surface.height;
           }
         else
-          _buffer_size_get(epc->pixmap, &prect.w, &prect.h);
+          _buffer_size_get(epc, &prect.w, &prect.h);
      }
 
    EINA_SAFETY_ON_FALSE_RETURN_VAL(prect.w > 0 && prect.h > 0, EINA_FALSE);
@@ -1424,7 +1424,7 @@ _e_devicemgr_viewport_apply_source(E_Viewport *viewport)
    if (viewport->cropped_source.w == -1)
      return EINA_FALSE;
 
-   _buffer_size_get(ec->pixmap, &bw, &bh);
+   _buffer_size_get(ec, &bw, &bh);
 
    rect.w = bw;
    rect.h = bh;
@@ -1481,7 +1481,7 @@ _e_devicemgr_viewport_apply(E_Client *ec)
         _e_devicemgr_viewport_topmost_check(viewport);
      }
 
-   if (viewport && e_pixmap_resource_get(ec->pixmap))
+   if (viewport && ec->comp_data->buffer_ref.buffer)
      {
         Eina_Bool changed = EINA_FALSE, src_changed = EINA_FALSE;
         Eina_Rectangle rrect = {0,};
@@ -1538,8 +1538,8 @@ _e_devicemgr_viewport_cb_apply_viewport(struct wl_listener *listener, void *data
    _e_devicemgr_viewport_topmost_check(viewport);
 
    if (!viewport->changed) return;
-   if (!e_pixmap_resource_get(ec->pixmap)) return;
-   if (viewport->epc && !e_pixmap_resource_get(viewport->epc->pixmap)) return;
+   if (!ec->comp_data->buffer_ref.buffer) return;
+   if (viewport->epc && !viewport->epc->comp_data->buffer_ref.buffer) return;
 
    viewport->changed = EINA_FALSE;
 
