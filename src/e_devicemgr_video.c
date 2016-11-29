@@ -2025,11 +2025,11 @@ e_devicemgr_video_init(void)
      }
 
 
-   /* try to add tizen_screenshooter to wayland globals */
+   /* try to add tizen_video to wayland globals */
    if (!wl_global_create(e_comp_wl->wl.disp, &tizen_video_interface, 1,
                          NULL, _e_devicemgr_video_cb_bind))
      {
-        ERR("Could not add tizen_screenshooter to wayland globals");
+        ERR("Could not add tizen_video to wayland globals");
         return 0;
      }
 
