@@ -1240,8 +1240,6 @@ _e_video_create(struct wl_resource *video_object, struct wl_resource *surface)
 
    VIN("create. ec(%p) wl_surface@%d", ec, wl_resource_get_id(video->surface));
 
-   ec->comp_data->video_client = 1;
-
    video_list = eina_list_append(video_list, video);
 
    _e_video_set(video, ec);
@@ -1292,6 +1290,18 @@ _e_video_set(E_Video *video, E_Client *ec)
         /* TODO: find proper output */
         video->output = e_devicemgr_tdm_output_get(video->drm_output);
         EINA_SAFETY_ON_NULL_RETURN(video->output);
+     }
+
+   VIN("set layer");
+   if (_e_video_set_layer(video, EINA_TRUE))
+     {
+        VIN("video client");
+        ec->comp_data->video_client = 1;
+     }
+   else
+     {
+        VIN("no video client");
+        ec->comp_data->video_client = 0;
      }
 
    tdm_output_get_available_size(video->output, &ominw, &ominh, &omaxw, &omaxh, &video->output_align);
@@ -1715,6 +1725,31 @@ _e_video_cb_ec_buffer_change(void *data, int type, void *event)
    video = find_video_with_surface(ec->comp_data->surface);
    if (!video) return ECORE_CALLBACK_PASS_ON;
 
+   if (!video->ec->comp_data->video_client)
+     {
+        E_Comp_Wl_Buffer *comp_buffer = e_pixmap_resource_get(ec->pixmap);
+        if (comp_buffer && comp_buffer->type != E_COMP_WL_BUFFER_TYPE_NATIVE)
+          {
+             tbm_surface_h tbm_surf = wayland_tbm_server_get_surface(e_comp_wl->tbm.server, comp_buffer->resource);
+             if (tbm_surf)
+               {
+                  comp_buffer->type = E_COMP_WL_BUFFER_TYPE_NATIVE;
+                  comp_buffer->w = tbm_surface_get_width(tbm_surf);
+                  comp_buffer->h = tbm_surface_get_height(tbm_surf);
+                  comp_buffer->tbm_surface = tbm_surf;
+               }
+          }
+        return ECORE_CALLBACK_PASS_ON;
+     }
+   else
+     {
+        E_Comp_Wl_Buffer *comp_buffer = e_pixmap_resource_get(ec->pixmap);
+        if (comp_buffer && comp_buffer->type != E_COMP_WL_BUFFER_TYPE_VIDEO)
+          {
+             comp_buffer->type = E_COMP_WL_BUFFER_TYPE_VIDEO;
+             comp_buffer->w = comp_buffer->h = 1;
+          }
+     }
 #ifdef HAVE_EOM
    /* skip external client buffer if its top parent is not current for eom anymore */
    if (video->external_video && !e_devicemgr_eom_is_ec_external(ec))
@@ -2008,6 +2043,27 @@ _e_devicemgr_video_dst_change(void *data, const char *log_path)
    i *= -1;
 }
 
+static void
+_e_devicemgr_video_layer_change(void *data, const char *log_path)
+{
+   Eina_List *video_list, *l;
+   E_Video *video;
+
+   video_list = e_devicemgr_video_list_get();
+
+   EINA_LIST_FOREACH(video_list, l, video)
+     {
+        if (video->ec->comp_data->video_client)
+          {printf("@@@ %s(%d) \n", __FUNCTION__, __LINE__);
+             video->ec->comp_data->video_client = 0;
+          }
+        else
+          {printf("@@@ %s(%d) \n", __FUNCTION__, __LINE__);
+             video->ec->comp_data->video_client = 1;
+          }
+     }
+}
+
 int
 e_devicemgr_video_init(void)
 {
@@ -2016,6 +2072,7 @@ e_devicemgr_video_init(void)
 
    e_info_server_hook_set("mbuf", _e_devicemgr_mbuf_print, NULL);
    e_info_server_hook_set("video-dst-change", _e_devicemgr_video_dst_change, NULL);
+   e_info_server_hook_set("video-layer-change", _e_devicemgr_video_layer_change, NULL);
 
    _video_detail_log_dom = eina_log_domain_register("e-devicemgr-video", EINA_COLOR_BLUE);
    if (_video_detail_log_dom < 0)
@@ -2050,6 +2107,7 @@ e_devicemgr_video_fini(void)
 
    e_info_server_hook_set("mbuf", NULL, NULL);
    e_info_server_hook_set("video-dst-change", NULL, NULL);
+   e_info_server_hook_set("video-layer-change", NULL, NULL);
 
    eina_log_domain_unregister(_video_detail_log_dom);
    _video_detail_log_dom = -1;
@@ -2059,13 +2117,6 @@ Eina_List*
 e_devicemgr_video_list_get(void)
 {
    return video_list;
-}
-
-E_Video*
-e_devicemgr_video_get(struct wl_resource *surface_resource)
-{
-   return find_video_with_surface(surface_resource);
-
 }
 
 E_Devmgr_Buf*

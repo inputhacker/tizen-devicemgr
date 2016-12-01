@@ -14,7 +14,6 @@ int e_devicemgr_video_init(void);
 void e_devicemgr_video_fini(void);
 
 Eina_List* e_devicemgr_video_list_get(void);
-E_Video* e_devicemgr_video_get(struct wl_resource *surface);
 E_Devmgr_Buf* e_devicemgr_video_fb_get(E_Video *video);
 void e_devicemgr_video_pos_get(E_Video *video, int *x, int *y);
 Ecore_Drm_Output* e_devicemgr_video_drm_output_get(E_Video *video);
