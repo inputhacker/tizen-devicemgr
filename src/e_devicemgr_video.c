@@ -1240,8 +1240,6 @@ _e_video_create(struct wl_resource *video_object, struct wl_resource *surface)
 
    VIN("create. ec(%p) wl_surface@%d", ec, wl_resource_get_id(video->surface));
 
-   ec->comp_data->video_client = 1;
-
    video_list = eina_list_append(video_list, video);
 
    _e_video_set(video, ec);
@@ -1292,6 +1290,19 @@ _e_video_set(E_Video *video, E_Client *ec)
         /* TODO: find proper output */
         video->output = e_devicemgr_tdm_output_get(video->drm_output);
         EINA_SAFETY_ON_NULL_RETURN(video->output);
+     }
+
+   VIN("set layer");
+   if (_e_video_set_layer(video, EINA_TRUE))
+     {
+        VIN("video client");
+        ec->comp_data->video_client = 1;
+     }
+   else
+     {
+        VIN("no video client");
+        ec->comp_data->video_client = 0;
+        ec->animatable = 0;
      }
 
    tdm_output_get_available_size(video->output, &ominw, &ominh, &omaxw, &omaxh, &video->output_align);
@@ -1357,6 +1368,9 @@ _e_video_set(E_Video *video, E_Client *ec)
 static void
 _e_video_hide(E_Video *video)
 {
+   if (video->current_fb || video->next_fb || video->waiting_list)
+     _e_video_frame_buffer_show(video, NULL);
+
    if (video->current_fb)
      {
         video->current_fb->in_use = EINA_FALSE;
@@ -1372,8 +1386,6 @@ _e_video_hide(E_Video *video)
    video->waiting_list = eina_list_free(video->waiting_list);
    if (video->waiting_list)
      NEVER_GET_HERE();
-
-   _e_video_frame_buffer_show(video, NULL);
 }
 
 static void
@@ -1714,6 +1726,9 @@ _e_video_cb_ec_buffer_change(void *data, int type, void *event)
    /* not interested with non video_surface,  */
    video = find_video_with_surface(ec->comp_data->surface);
    if (!video) return ECORE_CALLBACK_PASS_ON;
+
+   if (!video->ec->comp_data->video_client)
+     return ECORE_CALLBACK_PASS_ON;
 
 #ifdef HAVE_EOM
    /* skip external client buffer if its top parent is not current for eom anymore */
@@ -2059,13 +2074,6 @@ Eina_List*
 e_devicemgr_video_list_get(void)
 {
    return video_list;
-}
-
-E_Video*
-e_devicemgr_video_get(struct wl_resource *surface_resource)
-{
-   return find_video_with_surface(surface_resource);
-
 }
 
 E_Devmgr_Buf*
