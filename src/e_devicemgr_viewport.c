@@ -1209,7 +1209,18 @@ _e_devicemgr_viewport_crop_by_parent(E_Viewport *viewport, Eina_Rectangle *paren
      }
 
    if (crop.w == dst->w && crop.h == dst->h)
-     return;
+     {
+        if (viewport->source.w == -1)
+          {
+             viewport->cropped_source.x = viewport->cropped_source.y = 0;
+             viewport->cropped_source.w = bw;
+             viewport->cropped_source.h = bh;
+          }
+        else
+          viewport->cropped_source = viewport->source;
+
+        return;
+     }
 
    PDB("dst(%d,%d %dx%d)", EINA_RECTANGLE_ARGS(dst));
 
