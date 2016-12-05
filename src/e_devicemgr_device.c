@@ -1491,6 +1491,13 @@ _e_input_devmgr_cb_pointer_warp(struct wl_client *client, struct wl_resource *re
         return;
      }
 
+   if (e_pointer_is_hidden(e_comp->pointer))
+     {
+        DMDBG("Pointer is hidden");
+        tizen_input_device_manager_send_error(resource, TIZEN_INPUT_DEVICE_MANAGER_ERROR_NO_POINTER_AVAILABLE);
+        return;
+     }
+
    ret = _e_devicemgr_pointer_warp(ec->client.x + wl_fixed_to_int(x), ec->client.y + wl_fixed_to_int(y));
    tizen_input_device_manager_send_error(resource, ret);
 }
