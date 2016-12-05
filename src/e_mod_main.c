@@ -12,9 +12,7 @@
 #include "e_devicemgr_embedded_compositor.h"
 #include "e_devicemgr_device.h"
 #include "e_devicemgr_viewport.h"
-#ifdef HAVE_EOM
 #include "e_devicemgr_eom.h"
-#endif
 #endif
 #include "e_devicemgr_privates.h"
 
@@ -130,10 +128,9 @@ e_modapi_init(E_Module *m)
         SLOG(LOG_DEBUG, "DEVICEMGR", "[e_devicemgr][%s] Failed @ e_devicemgr_viewport_init()..!\n", __FUNCTION__);
         return NULL;
      }
-#ifdef HAVE_EOM
-   if (!e_devicemgr_eom_init())
-     SLOG(LOG_DEBUG, "DEVICEMGR", "[e_devicemgr][%s] Failed @ e_devicemgr_eom_init()..!\n", __FUNCTION__);
-#endif
+   if (dconfig->conf->eom_enable == EINA_TRUE)
+     if (!e_devicemgr_eom_init())
+       SLOG(LOG_DEBUG, "DEVICEMGR", "[e_devicemgr][%s] Failed @ e_devicemgr_eom_init()..!\n", __FUNCTION__);
 #endif
 
    return dconfig;
@@ -148,9 +145,8 @@ e_modapi_shutdown(E_Module *m)
    e_devicemgr_dpms_fini();
    e_devicemgr_screenshooter_fini();
    e_devicemgr_video_fini();
-#ifdef HAVE_EOM
-   e_devicemgr_eom_fini();
-#endif
+   if (dconfig->conf->eom_enable == EINA_TRUE)
+     e_devicemgr_eom_fini();
    e_devicemgr_tdm_fini();
    e_devicemgr_embedded_compositor_fini();
    e_devicemgr_device_fini();

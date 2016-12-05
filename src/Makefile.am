@@ -21,11 +21,7 @@ module_la_SOURCES      += \
 	e_devicemgr_tdm.c \
 	e_devicemgr_buffer.c \
 	e_devicemgr_embedded_compositor.c \
-	e_devicemgr_device.c
-endif
-
-if HAVE_EOM
-module_la_SOURCES      += \
+	e_devicemgr_device.c \
 	e_devicemgr_eom.c
 endif
 

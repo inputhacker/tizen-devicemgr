@@ -73,21 +73,6 @@ if test x$wayland_scanner = x; then
 	AC_MSG_ERROR([wayland-scanner is needed to compile])
 fi
 
-eom=no
-AC_ARG_ENABLE([eom],
-	AS_HELP_STRING([--enable-eom], [enable eom  @<:@default=enabled@:>@]),
-		[eom=$enableval],
-		[eom=no])
-AC_MSG_CHECKING([whether eom is enabled])
-AC_MSG_RESULT([${eom}])
-if test "x$eom" != "xno"; then
-	AC_DEFINE([HAVE_EOM], [1], [Enable eom])
-	have_eom=yes
-else
-	have_eom=no
-fi
-AM_CONDITIONAL([HAVE_EOM], [test "x${have_eom}" = "xyes"])
-
 have_wayland_only=no
 AC_ARG_ENABLE([wayland-only],
   AS_HELP_STRING([--enable-wayland-only],[enable wayland-only version of devicemgr @<:@default=disabled@:>@]),
@@ -100,11 +85,7 @@ fi
 AM_CONDITIONAL(HAVE_WAYLAND_ONLY, [test "x${have_wayland_only}" = xyes])
 
 if test "x${have_wayland_only}" = "xyes"; then
-	if test "x${have_eom}" = "xyes"; then
-		PKG_CHECK_MODULES(ENLIGHTENMENT, [enlightenment, dlog, wayland-server, screenshooter-server, tizen-extension-server, wayland-tbm-server, libtbm, libtdm, libpng, pixman-1, eom])
-	else
-		PKG_CHECK_MODULES(ENLIGHTENMENT, [enlightenment, dlog, wayland-server, screenshooter-server, tizen-extension-server, wayland-tbm-server, libtbm, libtdm, libpng, pixman-1])
-	fi
+	PKG_CHECK_MODULES(ENLIGHTENMENT, [enlightenment, dlog, wayland-server, screenshooter-server, tizen-extension-server, wayland-tbm-server, libtbm, libtdm, libpng, pixman-1, eom])
 	PKG_CHECK_MODULES(WAYLAND_SCANNER, wayland-scanner)
 else
 	PKG_CHECK_MODULES(ENLIGHTENMENT, [enlightenment, dlog, x11, utilX])
