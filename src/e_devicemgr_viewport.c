@@ -1212,12 +1212,16 @@ _e_devicemgr_viewport_crop_by_parent(E_Viewport *viewport, Eina_Rectangle *paren
      {
         if (viewport->source.w == -1)
           {
+             _buffer_size_get(viewport->ec, &bw, &bh);
+
              viewport->cropped_source.x = viewport->cropped_source.y = 0;
              viewport->cropped_source.w = bw;
              viewport->cropped_source.h = bh;
           }
         else
           viewport->cropped_source = viewport->source;
+
+        PDB("src(%d,%d %dx%d)", EINA_RECTANGLE_ARGS(&viewport->cropped_source));
 
         return;
      }
