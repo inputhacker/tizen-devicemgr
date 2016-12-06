@@ -1,17 +1,5 @@
 #include "e_devicemgr_viewport.h"
 
-int _log_dom_viewport = -1;
-#undef CRI
-#undef ERR
-#undef WRN
-#undef INF
-#undef DBG
-#define CRI(...) EINA_LOG_DOM_CRIT(_log_dom_viewport, __VA_ARGS__)
-#define ERR(...) EINA_LOG_DOM_ERR(_log_dom_viewport, __VA_ARGS__)
-#define WRN(...) EINA_LOG_DOM_WARN(_log_dom_viewport, __VA_ARGS__)
-#define INF(...) EINA_LOG_DOM_INFO(_log_dom_viewport, __VA_ARGS__)
-#define DBG(...) EINA_LOG_DOM_DBG(_log_dom_viewport, __VA_ARGS__)
-
 #define PER(fmt,arg...)   ERR("window(0x%08"PRIxPTR") ec(%p) epc(%p): "fmt, viewport->window, viewport->ec, viewport->epc, ##arg)
 #define PWR(fmt,arg...)   WRN("window(0x%08"PRIxPTR") ec(%p) epc(%p):"fmt, viewport->window, viewport->ec, viewport->epc, ##arg)
 #define PIN(fmt,arg...)   INF("window(0x%08"PRIxPTR") ec(%p) epc(%p):"fmt, viewport->window, viewport->ec, viewport->epc, ##arg)
@@ -1839,14 +1827,6 @@ e_devicemgr_viewport_init(void)
    if (!e_comp_wl->wl.disp) return 0;
 
    e_info_server_hook_set("viewport", _e_devicemgr_viewport_print, NULL);
-   _log_dom_viewport = eina_log_domain_register("e-devicemgr-viewport", EINA_COLOR_BLUE);
-   if (_log_dom_viewport < 0)
-     {
-        SLOG(LOG_DEBUG, "DEVICEMGR", "[e_devicemgr][%s] Failed @ eina_log_domain_register()..!\n", __FUNCTION__);
-        return 0;
-     }
-
-   eina_log_domain_level_set("e-devicemgr-viewport", EINA_LOG_LEVEL_INFO);
 
    return 1;
 }
@@ -1855,5 +1835,4 @@ void
 e_devicemgr_viewport_fini(void)
 {
    e_info_server_hook_set("viewport", NULL, NULL);
-   eina_log_domain_unregister(_log_dom_viewport);
 }
