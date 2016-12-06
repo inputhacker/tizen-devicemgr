@@ -1018,7 +1018,7 @@ _e_video_frame_buffer_show(E_Video *video, E_Devmgr_Buf *mbuf)
      {
         if (video->layer)
           {
-             VIN("unset layer");
+             VIN("unset layer: hide");
              _e_video_set_layer(video, EINA_FALSE);
           }
         return EINA_TRUE;
@@ -1026,7 +1026,7 @@ _e_video_frame_buffer_show(E_Video *video, E_Devmgr_Buf *mbuf)
 
    if (!video->layer)
      {
-        VIN("set layer");
+        VIN("set layer: show");
         if (!_e_video_set_layer(video, EINA_TRUE))
           {
              VER("set layer failed");
@@ -1292,7 +1292,7 @@ _e_video_set(E_Video *video, E_Client *ec)
         EINA_SAFETY_ON_NULL_RETURN(video->output);
      }
 
-   VIN("set layer");
+   VIN("set layer: create");
    if (_e_video_set_layer(video, EINA_TRUE))
      {
         VIN("video client");
@@ -1438,6 +1438,12 @@ _e_video_destroy(E_Video *video)
    /* destroy converter second */
    if (video->pp)
      tdm_pp_destroy(video->pp);
+
+   if (video->layer)
+     {
+        VIN("unset layer: destroy");
+        _e_video_set_layer(video, EINA_FALSE);
+     }
 
    video_list = eina_list_remove(video_list, video);
 
@@ -1837,7 +1843,7 @@ _e_devicemgr_video_object_cb_set_attribute(struct wl_client *client,
 
    if (!video->layer)
      {
-        VIN("set layer");
+        VIN("set layer: set_attribute");
         if (!_e_video_set_layer(video, EINA_TRUE))
           {
              VER("set layer failed");
