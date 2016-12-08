@@ -10,7 +10,7 @@
 static int _video_detail_log_dom = -1;
 static Eina_Bool video_to_primary;
 
-#define BUFFER_MAX_COUNT   3
+#define BUFFER_MAX_COUNT   5
 #define MIN_WIDTH   32
 
 #define VER(fmt,arg...)   ERR("window(0x%08"PRIxPTR"): "fmt, video->window, ##arg)
@@ -494,8 +494,6 @@ _e_video_pp_buffer_get(E_Video *video, int width, int height)
              e_devmgr_buffer_free_func_add(mbuf, _e_video_pp_buffer_cb_free, video);
              video->pp_buffer_list = eina_list_append(video->pp_buffer_list, mbuf);
 
-             tdm_buffer_add_release_handler(mbuf->tbm_surface,
-                                            _e_video_pp_buffer_cb_release, mbuf);
           }
 
         VIN("pp buffer created: %dx%d, %c%c%c%c",
@@ -961,15 +959,18 @@ _e_video_commit_handler(tdm_output *output, unsigned int sequence,
 
    DBG("---------------------------------");
 
-   if (video->current_fb && MBUF_IS_VALID(video->current_fb) && video->current_fb->comp_buffer)
+   if (video->current_fb && MBUF_IS_VALID(video->current_fb))
      {
         video->current_fb->in_use = EINA_FALSE;
 
         /* if client attachs the same wl_buffer twice, current_fb and next_fb can be same.
          * so we have to keep the reference for it
          */
-        if (video->next_fb != video->current_fb)
-          e_comp_wl_buffer_reference(&video->current_fb->buffer_ref, NULL);
+        if (video->current_fb->comp_buffer)
+          {
+             if (video->next_fb != video->current_fb)
+                  e_comp_wl_buffer_reference(&video->current_fb->buffer_ref, NULL);
+          }
      }
 
    video->current_fb = video->next_fb;
@@ -1065,7 +1066,6 @@ _e_video_frame_buffer_show(E_Video *video, E_Devmgr_Buf *mbuf)
    ret = tdm_output_commit(video->output, 0, _e_video_commit_handler, video);
    EINA_SAFETY_ON_FALSE_RETURN_VAL(ret == TDM_ERROR_NONE, EINA_FALSE);
 
-   mbuf->in_use = EINA_TRUE;
 
    topmost = find_topmost_parent_get(video->ec);
    if (topmost && (topmost->argb || topmost->comp_data->sub.below_obj) &&
@@ -1117,6 +1117,8 @@ _e_video_buffer_show(E_Video *video, E_Devmgr_Buf *mbuf, unsigned int transform)
 {
    mbuf->content_t = transform;
 
+   mbuf->in_use = EINA_TRUE;
+
    if (mbuf->comp_buffer)
      e_comp_wl_buffer_reference(&mbuf->buffer_ref, mbuf->comp_buffer);
 
@@ -1143,6 +1145,7 @@ _e_video_buffer_show(E_Video *video, E_Devmgr_Buf *mbuf, unsigned int transform)
    return;
 
 no_commit:
+   mbuf->in_use = EINA_FALSE;
    _e_video_commit_handler(NULL, 0, 0, 0, video);
    return;
 }
@@ -1542,11 +1545,12 @@ _e_video_pp_cb_done(tdm_pp *pp, tbm_surface_h sb, tbm_surface_h db, void *user_d
    if (input_buffer)
      e_devmgr_buffer_unref(input_buffer);
 
-   if (!_e_video_is_visible(video)) return;
-
    pp_buffer = _e_video_mbuf_find(video->pp_buffer_list, db);
    if (pp_buffer)
      {
+        pp_buffer->in_use = EINA_FALSE;
+        if (!_e_video_is_visible(video)) return;
+
         _e_video_buffer_show(video, pp_buffer, 0);
 
         /* don't unref pp_buffer here because we will unref it when video destroyed */
@@ -1554,6 +1558,12 @@ _e_video_pp_cb_done(tdm_pp *pp, tbm_surface_h sb, tbm_surface_h db, void *user_d
         static int i;
         e_devmgr_buffer_dump(pp_buffer, "out", i++, 0);
 #endif
+     }
+   else
+     {
+        VER("There is no pp_buffer");
+        // there is no way to set in_use flag.
+        // This will cause issue when server get available pp_buffer.
      }
 }
 
