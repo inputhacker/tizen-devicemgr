@@ -8,6 +8,7 @@
 //#define DUMP_BUFFER
 
 static int _video_detail_log_dom = -1;
+static Eina_Bool video_to_primary;
 
 #define BUFFER_MAX_COUNT   3
 #define MIN_WIDTH   32
@@ -1316,6 +1317,13 @@ _e_video_set(E_Video *video, E_Client *ec)
         ec->animatable = 0;
      }
 
+   if (video_to_primary)
+     {
+        VIN("show video to primary layer");
+        ec->comp_data->video_client = 0;
+        ec->animatable = 0;
+     }
+
    tdm_output_get_available_size(video->output, &ominw, &ominh, &omaxw, &omaxh, &video->output_align);
    ret = tdm_display_get_pp_available_size(e_devmgr_dpy->tdm, &pminw, &pminh, &pmaxw, &pmaxh, &video->pp_align);
 
@@ -2040,6 +2048,12 @@ _e_devicemgr_video_dst_change(void *data, const char *log_path)
    i *= -1;
 }
 
+static void
+_e_devicemgr_video_to_primary(void *data, const char *log_path)
+{
+   video_to_primary = !video_to_primary;
+}
+
 int
 e_devicemgr_video_init(void)
 {
@@ -2048,6 +2062,7 @@ e_devicemgr_video_init(void)
 
    e_info_server_hook_set("mbuf", _e_devicemgr_mbuf_print, NULL);
    e_info_server_hook_set("video-dst-change", _e_devicemgr_video_dst_change, NULL);
+   e_info_server_hook_set("video-to-primary", _e_devicemgr_video_to_primary, NULL);
 
    _video_detail_log_dom = eina_log_domain_register("e-devicemgr-video", EINA_COLOR_BLUE);
    if (_video_detail_log_dom < 0)
@@ -2082,6 +2097,7 @@ e_devicemgr_video_fini(void)
 
    e_info_server_hook_set("mbuf", NULL, NULL);
    e_info_server_hook_set("video-dst-change", NULL, NULL);
+   e_info_server_hook_set("video-to-primary", NULL, NULL);
 
    eina_log_domain_unregister(_video_detail_log_dom);
    _video_detail_log_dom = -1;
