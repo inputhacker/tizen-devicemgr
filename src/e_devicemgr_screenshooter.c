@@ -80,7 +80,7 @@ static uint mirror_format_table[] =
 
 #define NUM_MIRROR_FORMAT   (sizeof(mirror_format_table) / sizeof(mirror_format_table[0]))
 
-static E_Mirror *keep_mirror;
+static E_Mirror *keep_stream_mirror;
 
 static void _e_tz_screenmirror_destroy(E_Mirror *mirror);
 static void _e_tz_screenmirror_buffer_dequeue(E_Mirror_Buffer *buffer);
@@ -664,7 +664,7 @@ _e_tz_screenmirror_capture_stream_done(void *data)
 
    EINA_SAFETY_ON_NULL_RETURN_VAL(mirror, ECORE_CALLBACK_RENEW);
 
-   if (mirror != keep_mirror)
+   if (mirror != keep_stream_mirror)
      return ECORE_CALLBACK_RENEW;
 
    if (mirror->capture)
@@ -703,7 +703,7 @@ _e_tz_screenmirror_capture_stream_done_handler(tdm_capture *capture, tbm_surface
    E_Mirror *mirror = user_data;
    E_Mirror_Buffer *buffer = NULL;
 
-   if (mirror != keep_mirror)
+   if (mirror != keep_stream_mirror)
      return;
 
    buffer = _e_tz_screenmirror_mirrorbuf_find(mirror, surf);
@@ -973,7 +973,7 @@ _e_tz_screenmirror_vblank_handler(void *data)
    Eina_List *l;
 
    EINA_SAFETY_ON_NULL_RETURN(mirror);
-   if (mirror != keep_mirror)
+   if (mirror != keep_stream_mirror)
      return;
 
    mirror->wait_vblank = EINA_FALSE;
@@ -1029,12 +1029,8 @@ _e_tz_screenmirror_create(struct wl_client *client, struct wl_resource *shooter_
    int count, i, ret;
    unsigned int crtc_id;
 
-   EINA_SAFETY_ON_FALSE_RETURN_VAL(keep_mirror == NULL, NULL);
-
    mirror = E_NEW(E_Mirror, 1);
    EINA_SAFETY_ON_NULL_RETURN_VAL(mirror, NULL);
-
-   keep_mirror = mirror;
 
    mirror->stretch = TIZEN_SCREENMIRROR_STRETCH_KEEP_RATIO;
    mirror->shooter = shooter_resource;
@@ -1110,7 +1106,6 @@ fail_create:
       tdm_display_deinit(mirror->tdm_dpy);
 
    E_FREE(mirror);
-   keep_mirror = NULL;
 
    return NULL;
 }
@@ -1159,8 +1154,6 @@ _e_tz_screenmirror_destroy(E_Mirror *mirror)
      tdm_display_deinit(mirror->tdm_dpy);
 
    free(mirror);
-
-   keep_mirror = NULL;
 #if 0
    if (e_devmgr_buffer_list_length() > 0)
      e_devmgr_buffer_list_print(NULL);
@@ -1173,6 +1166,8 @@ destroy_tz_screenmirror(struct wl_resource *resource)
    E_Mirror *mirror = wl_resource_get_user_data(resource);
 
    _e_tz_screenmirror_destroy(mirror);
+
+   keep_stream_mirror = NULL;
 }
 
 static void
@@ -1333,18 +1328,26 @@ _e_tz_screenshooter_get_screenmirror(struct wl_client *client,
    int version = wl_resource_get_version(resource);
    E_Mirror *mirror;
 
+   if (keep_stream_mirror != NULL)
+     {
+        wl_resource_post_no_memory(resource);
+        return;
+     }
+
    mirror = _e_tz_screenmirror_create(client, resource, output);
    if (!mirror)
      {
         wl_resource_post_no_memory(resource);
         return;
      }
+   keep_stream_mirror = mirror;
 
    mirror->resource = wl_resource_create(client, &tizen_screenmirror_interface, version, id);
    if (mirror->resource == NULL)
      {
         _e_tz_screenmirror_destroy(mirror);
         wl_client_post_no_memory(client);
+        keep_stream_mirror = NULL;
         return;
      }
 
