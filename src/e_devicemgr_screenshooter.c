@@ -635,10 +635,10 @@ _e_tz_screenmirror_buffer_free(E_Mirror_Buffer *buffer)
 static Eina_Bool
 _e_tz_screenmirror_capture_oneshot_done(void *data)
 {
-   E_Mirror *mirror = data;
+   E_Mirror_Buffer *mirror_buffer = data;
+   E_Mirror *mirror = mirror_buffer->mirror;
 
-   EINA_SAFETY_ON_NULL_RETURN_VAL(mirror, ECORE_CALLBACK_RENEW);
-
+   _e_tz_screenmirror_buffer_free(mirror_buffer);
    _e_tz_screenmirror_destroy(mirror);
 
    DBG("_e_tz_screenmirror_capture_oneshot_done");
@@ -652,9 +652,7 @@ _e_tz_screenmirror_capture_oneshot_done_handler(tdm_capture *capture, tbm_surfac
    E_Mirror_Buffer *mirror_buffer = user_data;
    E_Mirror *mirror = mirror_buffer->mirror;
 
-   _e_tz_screenmirror_buffer_free(mirror_buffer);
-
-   mirror->timer = ecore_timer_add((double)1/DUMP_FPS, _e_tz_screenmirror_capture_oneshot_done, mirror);
+   mirror->timer = ecore_timer_add((double)1/DUMP_FPS, _e_tz_screenmirror_capture_oneshot_done, mirror_buffer);
 }
 
 static Eina_Bool
