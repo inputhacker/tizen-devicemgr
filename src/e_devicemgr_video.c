@@ -288,6 +288,28 @@ _e_video_is_visible(E_Video *video)
    return EINA_TRUE;
 }
 
+static Eina_Bool
+_e_video_parent_is_viewable(E_Video *video)
+{
+   E_Client *topmost_parent;
+
+   if (e_object_is_del(E_OBJECT(video->ec))) return EINA_FALSE;
+
+   topmost_parent = find_topmost_parent_get(video->ec);
+   if (topmost_parent == video->ec)
+     {
+        VDB("There is no video parent surface");
+        return EINA_FALSE;
+     }
+   if (topmost_parent && !topmost_parent->visible)
+     {
+        VDB("parent(0x%08x) not viewable", (unsigned int)e_client_util_win_get(topmost_parent));
+        return EINA_FALSE;
+     }
+
+   return EINA_TRUE;
+}
+
 static void
 _e_video_input_buffer_cb_free(E_Devmgr_Buf *mbuf, void *data)
 {
@@ -1252,6 +1274,15 @@ _e_video_create(struct wl_resource *video_object, struct wl_resource *surface)
 
    _e_video_set(video, ec);
 
+   if(!_e_video_parent_is_viewable(video) && !e_pixmap_resource_get(video->ec->pixmap))
+     {
+        if (video->layer)
+          {
+             VIN("unset layer: parent not viewable");
+             _e_video_set_layer(video, EINA_FALSE);
+          }
+     }
+
    return video;
 }
 
@@ -1897,9 +1928,17 @@ _e_devicemgr_video_object_cb_set_attribute(struct wl_client *client,
           {
              tdm_value v = {.u32 = value};
              tdm_layer_set_property(video->layer, props[i].id, v);
-             if (props[i].id == video->tdm_mute_id)
-               VDB("property(%s) value(%d)", name, value);
-             return;
+             VDB("property(%s) value(%d)", name, value);
+             break;
+          }
+     }
+
+   if(!_e_video_parent_is_viewable(video) && !e_pixmap_resource_get(video->ec->pixmap))
+     {
+        if (video->layer)
+          {
+             VIN("unset layer: parent not viewable");
+             _e_video_set_layer(video, EINA_FALSE);
           }
      }
 }
