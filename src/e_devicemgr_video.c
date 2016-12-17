@@ -914,6 +914,9 @@ _e_video_geometry_cal(E_Video * video)
    output_r.x += video->geo.output_r.x;
    output_r.y += video->geo.output_r.y;
 
+   input_r.x += video->geo.input_r.x;
+   input_r.y += video->geo.input_r.y;
+
    output_r.x = output_r.x & ~1;
    output_r.w = (output_r.w + 1) & ~1;
 
