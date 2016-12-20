@@ -51,6 +51,7 @@ typedef struct _E_Mirror
 
    struct wl_listener client_destroy_listener;
 
+   Eina_Bool oneshot_client_destroy;
 #ifdef ENABLE_CYNARA
    cynara *p_cynara;
    Eina_Bool cynara_initialized;
@@ -81,6 +82,7 @@ static uint mirror_format_table[] =
 #define NUM_MIRROR_FORMAT   (sizeof(mirror_format_table) / sizeof(mirror_format_table[0]))
 
 static E_Mirror *keep_stream_mirror;
+static Eina_List *mirror_list;
 
 static void _e_tz_screenmirror_destroy(E_Mirror *mirror);
 static void _e_tz_screenmirror_buffer_dequeue(E_Mirror_Buffer *buffer);
@@ -638,12 +640,11 @@ _e_tz_screenmirror_capture_oneshot_done(void *data)
    E_Mirror_Buffer *mirror_buffer = data;
    E_Mirror *mirror = mirror_buffer->mirror;
 
-   _e_tz_screenmirror_buffer_free(mirror_buffer);
    _e_tz_screenmirror_destroy(mirror);
 
    DBG("_e_tz_screenmirror_capture_oneshot_done");
 
-   return ECORE_CALLBACK_RENEW;
+   return ECORE_CALLBACK_CANCEL;
 }
 
 static void
@@ -660,10 +661,10 @@ _e_tz_screenmirror_capture_stream_done(void *data)
 {
    E_Mirror *mirror = data;
 
-   EINA_SAFETY_ON_NULL_RETURN_VAL(mirror, ECORE_CALLBACK_RENEW);
+   EINA_SAFETY_ON_NULL_RETURN_VAL(mirror, ECORE_CALLBACK_CANCEL);
 
    if (mirror != keep_stream_mirror)
-     return ECORE_CALLBACK_RENEW;
+     return ECORE_CALLBACK_CANCEL;
 
    if (mirror->capture)
      {
@@ -671,7 +672,7 @@ _e_tz_screenmirror_capture_stream_done(void *data)
         mirror->capture = NULL;
      }
 
-   return ECORE_CALLBACK_RENEW;
+   return ECORE_CALLBACK_CANCEL;
 }
 
 static E_Mirror_Buffer *
@@ -885,7 +886,10 @@ _e_tz_screenmirror_buffer_dequeue(E_Mirror_Buffer *buffer)
     * a dequeued event for tizen_screenmirror.
     */
    if (mirror->resource == mirror->shooter)
-     screenshooter_send_done(mirror->resource);
+     {
+        if (!mirror->oneshot_client_destroy)
+          screenshooter_send_done(mirror->resource);
+     }
    else
      tizen_screenmirror_send_dequeued(mirror->resource, buffer->mbuf->resource);
 }
@@ -923,6 +927,10 @@ static void
 _e_tz_screenmirror_buffer_cb_free(E_Devmgr_Buf *mbuf, void *data)
 {
    E_Mirror_Buffer *buffer = data;
+   E_Mirror *mirror = buffer->mirror;
+
+   if (mirror->resource == mirror->shooter)
+     mirror->oneshot_client_destroy = EINA_TRUE;
 
    _e_tz_screenmirror_buffer_free(buffer);
 }
@@ -1012,6 +1020,11 @@ _e_tz_screenmirror_cb_client_destroy(struct wl_listener *listener, void *data)
 {
    E_Mirror *mirror = container_of(listener, E_Mirror, client_destroy_listener);
 
+   if (mirror->resource == mirror->shooter)
+     {
+        mirror->oneshot_client_destroy = EINA_TRUE;
+        return;
+     }
    _e_tz_screenmirror_destroy(mirror);
 }
 
@@ -1091,8 +1104,12 @@ _e_tz_screenmirror_create(struct wl_client *client, struct wl_resource *shooter_
    mirror->cynara_initialized = EINA_TRUE;
 #endif
 
+   mirror_list = eina_list_append(mirror_list, mirror);
+
    mirror->client_destroy_listener.notify = _e_tz_screenmirror_cb_client_destroy;
    wl_client_add_destroy_listener(client, &mirror->client_destroy_listener);
+
+   mirror->oneshot_client_destroy = EINA_FALSE;
 
    return mirror;
 fail_create:
@@ -1108,6 +1125,15 @@ fail_create:
    return NULL;
 }
 
+static Eina_Bool
+_e_tz_screenmirror_find_mirror(E_Mirror *mirror)
+{
+   if (!eina_list_data_find(mirror_list, mirror))
+     return EINA_FALSE;
+   else
+     return EINA_TRUE;
+}
+
 static void
 _e_tz_screenmirror_destroy(E_Mirror *mirror)
 {
@@ -1118,6 +1144,10 @@ _e_tz_screenmirror_destroy(E_Mirror *mirror)
    if (!mirror)
      return;
 
+   if (!_e_tz_screenmirror_find_mirror(mirror))
+     return;
+   mirror_list = eina_list_remove(mirror_list, mirror);
+
 #ifdef ENABLE_CYNARA
    if (mirror->p_cynara) cynara_finish(mirror->p_cynara);
    mirror->p_cynara = NULL;
@@ -1126,30 +1156,34 @@ _e_tz_screenmirror_destroy(E_Mirror *mirror)
 
    if (mirror->timer)
      ecore_timer_del(mirror->timer);
+   mirror->timer = NULL;
 
    if (mirror->client_destroy_listener.notify)
-     {
-        wl_list_remove(&mirror->client_destroy_listener.link);
-        mirror->client_destroy_listener.notify = NULL;
-     }
+     wl_list_remove(&mirror->client_destroy_listener.link);
+   mirror->client_destroy_listener.notify = NULL;
 
    wl_resource_set_destructor(mirror->resource, NULL);
 
    _e_tz_screenmirror_pp_destroy(mirror);
 
    EINA_LIST_FREE(mirror->buffer_clear_check, mbuf);
+   mirror->buffer_clear_check = NULL;
 
    EINA_LIST_FOREACH_SAFE(mirror->buffer_queue, l, ll, buffer)
      _e_tz_screenmirror_buffer_free(buffer);
+   mirror->buffer_queue = NULL;
 
    EINA_LIST_FOREACH_SAFE(mirror->ui_buffer_list, l, ll, mbuf)
      e_devmgr_buffer_unref(mbuf);
+   mirror->ui_buffer_list = NULL;
 
    if (mirror->capture)
      tdm_capture_destroy(mirror->capture);
+   mirror->capture = NULL;
 
    if (mirror->tdm_dpy)
      tdm_display_deinit(mirror->tdm_dpy);
+   mirror->tdm_dpy = NULL;
 
    free(mirror);
 #if 0
