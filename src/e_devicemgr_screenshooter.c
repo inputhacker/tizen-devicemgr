@@ -49,6 +49,10 @@ typedef struct _E_Mirror
    Eina_List *ui_buffer_list;
    Eina_List *buffer_clear_check;
 
+   /* rotation info */
+   int angle;
+   Eina_Bool rotate_change;
+
    struct wl_listener client_destroy_listener;
 
    Eina_Bool oneshot_client_destroy;
@@ -82,6 +86,7 @@ static uint mirror_format_table[] =
 #define NUM_MIRROR_FORMAT   (sizeof(mirror_format_table) / sizeof(mirror_format_table[0]))
 
 static E_Mirror *keep_stream_mirror;
+static Eina_Bool screenshot_auto_rotation;
 static Eina_List *mirror_list;
 
 static void _e_tz_screenmirror_destroy(E_Mirror *mirror);
@@ -562,6 +567,8 @@ _e_tz_screenmirror_dump_still(E_Mirror_Buffer *buffer)
    Eina_Rectangle vr, ur;
    Eina_List *video_list, *l;
    E_Video *vdo;
+   int rotate = 0;
+   int scale_width, scale_height;
 
    dst = buffer->mbuf;
    EINA_SAFETY_ON_NULL_RETURN(dst);
@@ -571,6 +578,22 @@ _e_tz_screenmirror_dump_still(E_Mirror_Buffer *buffer)
    /* get ui buffer */
    ui = _e_tz_screenmirror_ui_buffer_get(mirror);
    EINA_SAFETY_ON_NULL_RETURN(ui);
+
+   if (mirror->rotate_change)
+     {
+        scale_width = ui->height;
+        scale_height = ui->width;
+
+        if (mirror->angle == 90)
+          rotate = 90;
+        else if (mirror->angle == 270)
+          rotate = 270;
+     }
+   else
+     {
+        scale_width = ui->width;
+        scale_height = ui->height;
+     }
 
    video_list = e_devicemgr_video_list_get();
    EINA_LIST_FOREACH(video_list, l, vdo)
@@ -587,26 +610,26 @@ _e_tz_screenmirror_dump_still(E_Mirror_Buffer *buffer)
         vr.w = video->width;
         vr.h = video->height;
 
-        _e_tz_screenmirror_rect_scale(ui->width, ui->height, dst->width, dst->height, &vr);
+        _e_tz_screenmirror_rect_scale(scale_width, scale_height, dst->width, dst->height, &vr);
 
         /* dump video buffer */
         e_devmgr_buffer_convert(video, dst,
                                 0, 0, video->width, video->height,
                                 vr.x, vr.y, vr.w, vr.h,
-                                EINA_FALSE, 0, 0, 0);
+                                EINA_FALSE, rotate, 0, 0);
      }
 
    ur.x = ur.y = 0;
    ur.w = ui->width;
    ur.h = ui->height;
 
-   _e_tz_screenmirror_center_rect(ui->width, ui->height, dst->width, dst->height, &ur);
+   _e_tz_screenmirror_center_rect(scale_width, scale_height, dst->width, dst->height, &ur);
 
    /* dump ui buffer */
    e_devmgr_buffer_convert(ui, dst,
                            0, 0, ui->width, ui->height,
                            ur.x, ur.y, ur.w, ur.h,
-                           EINA_TRUE, 0, 0, 0);
+                           EINA_TRUE, rotate, 0, 0);
 }
 
 static void
@@ -721,6 +744,48 @@ _e_tz_screenmirror_capture_stream_done_handler(tdm_capture *capture, tbm_surface
      }
 }
 
+static E_Client *
+_e_tz_screenmirror_top_visible_ec_get()
+{
+   E_Client *ec;
+   Evas_Object *o;
+   E_Comp_Wl_Client_Data *cdata;
+
+   for (o = evas_object_top_get(e_comp->evas); o; o = evas_object_below_get(o))
+     {
+        ec = evas_object_data_get(o, "E_Client");
+
+        /* check e_client and skip e_clients not intersects with zone */
+        if (!ec) continue;
+        if (e_object_is_del(E_OBJECT(ec))) continue;
+        if (e_client_util_ignored_get(ec)) continue;
+        if (ec->iconic) continue;
+        if (ec->visible == 0) continue;
+        if (!(ec->visibility.obscured == 0 || ec->visibility.obscured == 1)) continue;
+        if (!ec->frame) continue;
+        if (!evas_object_visible_get(ec->frame)) continue;
+        /* if ec is subsurface, skip this */
+        cdata = (E_Comp_Wl_Client_Data *)ec->comp_data;
+        if (cdata && cdata->sub.data) continue;
+
+        return ec;
+     }
+
+   return NULL;
+}
+
+static int
+_e_tz_screenmirror_get_angle()
+{
+   E_Client *ec;
+
+   ec = _e_tz_screenmirror_top_visible_ec_get();
+   if (ec)
+     return ec->e.state.rot.ang.curr;
+
+   return 0;
+}
+
 static Eina_Bool
 _e_tz_screenmirror_position_get(E_Mirror *mirror, E_Devmgr_Buf *mbuf, Eina_Rectangle *fit)
 {
@@ -732,7 +797,11 @@ _e_tz_screenmirror_position_get(E_Mirror *mirror, E_Devmgr_Buf *mbuf, Eina_Recta
         ERR("_e_tz_screenmirror_position_get: get ui buf failed");
         return EINA_FALSE;
      }
-   _e_tz_screenmirror_center_rect(ui->width, ui->height, mbuf->width, mbuf->height, fit);
+
+   if (mirror->rotate_change)
+     _e_tz_screenmirror_center_rect(ui->height, ui->width, mbuf->width, mbuf->height, fit);
+   else
+     _e_tz_screenmirror_center_rect(ui->width, ui->height, mbuf->width, mbuf->height, fit);
 
    return EINA_TRUE;
 }
@@ -796,14 +865,19 @@ _e_tz_screenmirror_tdm_capture_support(E_Mirror_Buffer *buffer, tdm_capture_capa
         else
           capture_info.type = TDM_CAPTURE_TYPE_STREAM;
 
-        if (mirror->stretch == TIZEN_SCREENMIRROR_STRETCH_KEEP_RATIO)
+        if (_e_tz_screenmirror_position_get(mirror, buffer->mbuf, &dst_pos))
           {
-             if (_e_tz_screenmirror_position_get(mirror, buffer->mbuf, &dst_pos))
+             capture_info.dst_config.pos.x = dst_pos.x;
+             capture_info.dst_config.pos.y = dst_pos.y;
+             capture_info.dst_config.pos.w = dst_pos.w;
+             capture_info.dst_config.pos.h = dst_pos.h;
+
+             if (mirror->rotate_change)
                {
-                  capture_info.dst_config.pos.x = dst_pos.x;
-                  capture_info.dst_config.pos.y = dst_pos.y;
-                  capture_info.dst_config.pos.w = dst_pos.w;
-                  capture_info.dst_config.pos.h = dst_pos.h;
+                  if (mirror->angle == 90)
+                    capture_info.transform = TDM_TRANSFORM_90;
+                  else /* 270 */
+                    capture_info.transform = TDM_TRANSFORM_270;
                }
           }
 
@@ -1398,9 +1472,23 @@ _e_tz_screenshooter_get_screenmirror(struct wl_client *client,
    tizen_screenmirror_send_content(mirror->resource, TIZEN_SCREENMIRROR_CONTENT_NORMAL);
 }
 
+static void
+_e_tz_screenshooter_set_oneshot_auto_rotation(struct wl_client *client,
+                                     struct wl_resource *resource,
+                                     uint32_t set)
+{
+   DBG("_e_tz_screenshooter_set_oneshot_auto_rotation: %d", set);
+
+   if (set)
+     screenshot_auto_rotation = EINA_TRUE;
+   else
+     screenshot_auto_rotation = EINA_FALSE;
+}
+
 static const struct tizen_screenshooter_interface _e_tz_screenshooter_interface =
 {
-   _e_tz_screenshooter_get_screenmirror
+   _e_tz_screenshooter_get_screenmirror,
+   _e_tz_screenshooter_set_oneshot_auto_rotation
 };
 
 static void
@@ -1480,6 +1568,11 @@ _e_screenshooter_cb_shoot(struct wl_client *client,
         goto dump_done;
      }
 
+   mirror->angle = _e_tz_screenmirror_get_angle();
+   if (screenshot_auto_rotation)
+     if (mirror->angle == 90 || mirror->angle == 270)
+       mirror->rotate_change = EINA_TRUE;
+
    if (_e_tz_screenmirror_tdm_capture_support(buffer, TDM_CAPTURE_CAPABILITY_ONESHOT))
      {
         if (_e_tz_screenmirror_tdm_capture_oneshot(mirror, buffer) == EINA_TRUE)
@@ -1516,6 +1609,8 @@ _e_screenshooter_cb_bind(struct wl_client *client, void *data, uint32_t version,
         wl_client_post_no_memory(client);
         return;
      }
+
+   screenshot_auto_rotation = EINA_TRUE;
 
    wl_resource_set_implementation(res, &_e_screenshooter_interface, NULL, NULL);
 }
