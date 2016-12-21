@@ -303,7 +303,7 @@ _e_video_parent_is_viewable(E_Video *video)
      }
    if (topmost_parent && !topmost_parent->visible)
      {
-        VDB("parent(0x%08x) not viewable", (unsigned int)e_client_util_win_get(topmost_parent));
+        VDB("parent(0x%08"PRIxPTR") not viewable", (Ecore_Window)e_client_util_win_get(topmost_parent));
         return EINA_FALSE;
      }
 
