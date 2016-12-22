@@ -222,14 +222,14 @@ _e_video_mbuf_find_with_comp_buffer(Eina_List *list, E_Comp_Wl_Buffer *comp_buff
 }
 
 static Eina_Bool
-_e_video_set_layer(E_Video *video, Eina_Bool set)
+_e_video_set_layer(E_Video *video, Eina_Bool set, Eina_Bool need_stopped)
 {
    if (!set)
      {
         unsigned int usable = 1;
         if (!video->layer) return EINA_TRUE;
         tdm_layer_is_usable(video->layer, &usable);
-        if (!usable)
+        if (!usable && need_stopped)
           {
              VIN("stop video");
              tdm_layer_unset_buffer(video->layer);
@@ -1047,7 +1047,7 @@ _e_video_frame_buffer_show(E_Video *video, E_Devmgr_Buf *mbuf)
         if (video->layer)
           {
              VIN("unset layer: hide");
-             _e_video_set_layer(video, EINA_FALSE);
+             _e_video_set_layer(video, EINA_FALSE, EINA_TRUE);
           }
         return EINA_TRUE;
      }
@@ -1055,7 +1055,7 @@ _e_video_frame_buffer_show(E_Video *video, E_Devmgr_Buf *mbuf)
    if (!video->layer)
      {
         VIN("set layer: show");
-        if (!_e_video_set_layer(video, EINA_TRUE))
+        if (!_e_video_set_layer(video, EINA_TRUE, EINA_TRUE))
           {
              VER("set layer failed");
              return EINA_FALSE;
@@ -1279,7 +1279,7 @@ _e_video_create(struct wl_resource *video_object, struct wl_resource *surface)
         if (video->layer)
           {
              VIN("unset layer: parent not viewable");
-             _e_video_set_layer(video, EINA_FALSE);
+             _e_video_set_layer(video, EINA_FALSE, EINA_FALSE);
           }
      }
 
@@ -1342,7 +1342,7 @@ _e_video_set(E_Video *video, E_Client *ec)
      }
 
    VIN("set layer: create");
-   if (_e_video_set_layer(video, EINA_TRUE))
+   if (_e_video_set_layer(video, EINA_TRUE, EINA_TRUE))
      {
         VIN("video client");
         ec->comp_data->video_client = 1;
@@ -1498,7 +1498,7 @@ _e_video_destroy(E_Video *video)
    if (video->layer)
      {
         VIN("unset layer: destroy");
-        _e_video_set_layer(video, EINA_FALSE);
+        _e_video_set_layer(video, EINA_FALSE, EINA_TRUE);
      }
 
    video_list = eina_list_remove(video_list, video);
@@ -1907,7 +1907,7 @@ _e_devicemgr_video_object_cb_set_attribute(struct wl_client *client,
    if (!video->layer)
      {
         VIN("set layer: set_attribute");
-        if (!_e_video_set_layer(video, EINA_TRUE))
+        if (!_e_video_set_layer(video, EINA_TRUE, EINA_TRUE))
           {
              VER("set layer failed");
              return;
@@ -1938,7 +1938,7 @@ _e_devicemgr_video_object_cb_set_attribute(struct wl_client *client,
         if (video->layer)
           {
              VIN("unset layer: parent not viewable");
-             _e_video_set_layer(video, EINA_FALSE);
+             _e_video_set_layer(video, EINA_FALSE, EINA_FALSE);
           }
      }
 }
