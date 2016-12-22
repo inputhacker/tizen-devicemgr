@@ -1290,11 +1290,10 @@ static void
 _e_video_set(E_Video *video, E_Client *ec)
 {
    int ominw = -1, ominh = -1, omaxw = -1, omaxh = -1;
-   int pminw = -1, pminh = -1, pmaxw = -1, pmaxh = -1;
    int i, count = 0;
+   tdm_display_capability capabilities;
    const tdm_prop *props;
    tdm_layer *layer;
-   tdm_error ret;
 
    if (!video || !ec)
       return;
@@ -1362,9 +1361,10 @@ _e_video_set(E_Video *video, E_Client *ec)
      }
 
    tdm_output_get_available_size(video->output, &ominw, &ominh, &omaxw, &omaxh, &video->output_align);
-   ret = tdm_display_get_pp_available_size(e_devmgr_dpy->tdm, &pminw, &pminh, &pmaxw, &pmaxh, &video->pp_align);
 
-   if (ret != TDM_ERROR_NONE)
+   tdm_display_get_capabilities(e_devmgr_dpy->tdm, &capabilities);
+
+   if (!(capabilities & TDM_DISPLAY_CAPABILITY_PP))
      {
         video->video_align = video->output_align;
         tizen_video_object_send_size(video->video_object,
@@ -1373,6 +1373,9 @@ _e_video_set(E_Video *video, E_Client *ec)
    else
      {
         int minw = -1, minh = -1, maxw = -1, maxh = -1;
+        int pminw = -1, pminh = -1, pmaxw = -1, pmaxh = -1;
+
+        tdm_display_get_pp_available_size(e_devmgr_dpy->tdm, &pminw, &pminh, &pmaxw, &pmaxh, &video->pp_align);
 
         minw = MAX(ominw, pminw);
         minh = MAX(ominh, pminh);
