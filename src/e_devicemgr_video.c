@@ -264,7 +264,7 @@ _e_video_set_layer(E_Video *video, Eina_Bool set)
           {
              VIN("stop video");
              tdm_layer_unset_buffer(video->layer);
-             tdm_output_commit(video->output, 0, NULL, NULL);
+             tdm_layer_commit(video->layer, NULL, NULL);
           }
         VIN("release layer: %p", video->layer);
         e_devicemgr_tdm_set_layer_usable(video->layer, EINA_TRUE);
@@ -1009,7 +1009,7 @@ _e_video_format_info_get(E_Video *video)
 }
 
 static void
-_e_video_commit_handler(tdm_output *output, unsigned int sequence,
+_e_video_commit_handler(tdm_layer *layer, unsigned int sequence,
                         unsigned int tv_sec, unsigned int tv_usec,
                         void *user_data)
 {
@@ -1138,7 +1138,7 @@ _e_video_frame_buffer_show(E_Video *video, E_Devmgr_Buf *mbuf)
    ret = tdm_layer_set_buffer(video->layer, mbuf->tbm_surface);
    EINA_SAFETY_ON_FALSE_RETURN_VAL(ret == TDM_ERROR_NONE, EINA_FALSE);
 
-   ret = tdm_output_commit(video->output, 0, _e_video_commit_handler, video);
+   ret = tdm_layer_commit(video->layer, _e_video_commit_handler, video);
    EINA_SAFETY_ON_FALSE_RETURN_VAL(ret == TDM_ERROR_NONE, EINA_FALSE);
 
 
@@ -1202,7 +1202,7 @@ _e_video_buffer_show(E_Video *video, E_Devmgr_Buf *mbuf, unsigned int transform)
    else
      {
         video->waiting_list = eina_list_append(video->waiting_list, mbuf);
-        VDT("There are waiting fbs more than 1");
+        VDB("There are waiting fbs more than 1");
         return;
      }
    if (dconfig->conf->eom_enable == EINA_TRUE)
@@ -1220,6 +1220,7 @@ _e_video_buffer_show(E_Video *video, E_Devmgr_Buf *mbuf, unsigned int transform)
    return;
 
 no_commit:
+   video->next_fb = NULL;
    mbuf->in_use = EINA_FALSE;
    _e_video_commit_handler(NULL, 0, 0, 0, video);
    return;

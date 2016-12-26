@@ -527,9 +527,9 @@ _e_eom_tbm_buffer_release_mirror_mod(E_EomOutputPtr eom_output, tbm_surface_h su
 }
 
 static void
-_e_eom_cb_output_commit(tdm_output *output EINA_UNUSED, unsigned int sequence EINA_UNUSED,
-                        unsigned int tv_sec EINA_UNUSED, unsigned int tv_usec EINA_UNUSED,
-                        void *user_data)
+_e_eom_cb_layer_commit(tdm_layer *layer EINA_UNUSED, unsigned int sequence EINA_UNUSED,
+                       unsigned int tv_sec EINA_UNUSED, unsigned int tv_usec EINA_UNUSED,
+                       void *user_data)
 {
    E_EomOutputBufferPtr outbuff = NULL;
    E_EomOutputPtr eom_output = NULL;
@@ -579,7 +579,7 @@ _e_eom_cb_output_commit(tdm_output *output EINA_UNUSED, unsigned int sequence EI
         err = tdm_layer_set_buffer(eom_output->layer, outbuff->tbm_surface);
         EINA_SAFETY_ON_FALSE_GOTO(err == TDM_ERROR_NONE, error);
 
-        err = tdm_output_commit(eom_output->output, 0, _e_eom_cb_output_commit, outbuff);
+        err = tdm_layer_commit(eom_output->layer, _e_eom_cb_layer_commit, outbuff);
         EINA_SAFETY_ON_FALSE_GOTO(err == TDM_ERROR_NONE, error);
 
         eom_output->wait_buff = outbuff;
@@ -615,7 +615,7 @@ _e_eom_output_show(E_EomOutputPtr eom_output, tbm_surface_h tbm_srfc,
         err = tdm_layer_set_buffer(eom_output->layer, outbuff->tbm_surface);
         EINA_SAFETY_ON_FALSE_GOTO(err == TDM_ERROR_NONE, error);
 
-        err = tdm_output_commit(eom_output->output, 0, _e_eom_cb_output_commit, outbuff);
+        err = tdm_layer_commit(eom_output->layer, _e_eom_cb_layer_commit, outbuff);
         EINA_SAFETY_ON_FALSE_GOTO(err == TDM_ERROR_NONE, error2);
 
         eom_output->wait_buff = outbuff;
@@ -1165,7 +1165,7 @@ _e_eom_output_deinit(E_EomOutputPtr eom_output)
         if (err != TDM_ERROR_NONE)
           EOMDB("fail unset buffer:%d", err);
 
-        err = tdm_output_commit(eom_output->output, 0, NULL, eom_output);
+        err = tdm_layer_commit(eom_output->layer, NULL, eom_output);
         if (err != TDM_ERROR_NONE)
           EOMDB ("fail commit on deleting output err:%d", err);
     }
