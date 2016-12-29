@@ -74,6 +74,7 @@ struct _E_Video
    int tdm_mute_id;
 
    Eina_Bool  cb_registered;
+   Eina_Bool  parent_cb_registered;
 };
 
 static Eina_List *video_list;
@@ -296,14 +297,25 @@ _e_video_parent_is_viewable(E_Video *video)
    if (e_object_is_del(E_OBJECT(video->ec))) return EINA_FALSE;
 
    topmost_parent = find_topmost_parent_get(video->ec);
+
+   if (!topmost_parent)
+      return EINA_FALSE;
+
    if (topmost_parent == video->ec)
      {
         VDB("There is no video parent surface");
         return EINA_FALSE;
      }
-   if (topmost_parent && !topmost_parent->visible)
+
+   if (!topmost_parent->visible)
      {
         VDB("parent(0x%08"PRIxPTR") not viewable", (Ecore_Window)e_client_util_win_get(topmost_parent));
+        return EINA_FALSE;
+     }
+
+   if (!e_pixmap_resource_get(topmost_parent->pixmap))
+     {
+        VDB("parent(0x%08"PRIxPTR") no comp buffer", (Ecore_Window)e_client_util_win_get(topmost_parent));
         return EINA_FALSE;
      }
 
@@ -1194,6 +1206,20 @@ _e_video_cb_evas_move(void *data, Evas *e EINA_UNUSED, Evas_Object *obj EINA_UNU
 }
 
 static void
+_e_video_topmost_cb_evas_show(void *data, Evas *e EINA_UNUSED, Evas_Object *obj EINA_UNUSED, void *event_info EINA_UNUSED)
+{
+   E_Video *video = data;
+   VIN("video parent surface show ");
+   if(video->old_comp_buffer)
+     {
+        VIN("video already rendering..");
+        return;
+     }
+   VIN("video need rendering..");
+   _e_video_render(video, __FUNCTION__);
+}
+
+static void
 _e_video_cb_evas_show(void *data, Evas *e EINA_UNUSED, Evas_Object *obj EINA_UNUSED, void *event_info EINA_UNUSED)
 {
    E_Video *video = data;
@@ -1452,6 +1478,7 @@ _e_video_destroy(E_Video *video)
 {
    E_Devmgr_Buf *mbuf;
    Eina_List *l = NULL, *ll = NULL;
+   E_Client *topmost;
 
    if (!video)
       return;
@@ -1468,6 +1495,13 @@ _e_video_destroy(E_Video *video)
                                             _e_video_cb_evas_hide, video);
         evas_object_event_callback_del_full(video->ec->frame, EVAS_CALLBACK_SHOW,
                                             _e_video_cb_evas_show, video);
+     }
+
+   if(video->parent_cb_registered)
+     {
+        topmost = find_topmost_parent_get(video->ec);
+        evas_object_event_callback_del_full(topmost->frame, EVAS_CALLBACK_SHOW,
+                                            _e_video_topmost_cb_evas_show, video);
      }
 
    wl_resource_set_destructor(video->video_object, NULL);
@@ -1610,6 +1644,7 @@ _e_video_render(E_Video *video, const char *func)
    E_Comp_Wl_Buffer *comp_buffer;
    E_Devmgr_Buf *pp_buffer = NULL;
    E_Devmgr_Buf *input_buffer = NULL;
+   E_Client *topmost;
 
    EINA_SAFETY_ON_NULL_RETURN(video->ec);
 
@@ -1635,7 +1670,17 @@ _e_video_render(E_Video *video, const char *func)
      return;
 
    if (!_e_video_geometry_cal(video))
-     return;
+     {
+        topmost = find_topmost_parent_get(video->ec);
+        EINA_SAFETY_ON_NULL_RETURN(topmost);
+        if(!video->parent_cb_registered && !_e_video_parent_is_viewable(video))
+          {
+             evas_object_event_callback_add(topmost->frame, EVAS_CALLBACK_SHOW,
+                                            _e_video_topmost_cb_evas_show, video);
+             video->parent_cb_registered = EINA_TRUE;
+          }
+        return;
+     }
 
    if (!memcmp(&video->old_geo, &video->geo, sizeof video->geo) &&
        video->old_comp_buffer == comp_buffer)
