@@ -1185,6 +1185,9 @@ _e_tz_screenmirror_destroy(E_Mirror *mirror)
      tdm_display_deinit(mirror->tdm_dpy);
    mirror->tdm_dpy = NULL;
 
+   if (keep_stream_mirror == mirror)
+     keep_stream_mirror = NULL;
+
    free(mirror);
 #if 0
    if (e_devmgr_buffer_list_length() > 0)
