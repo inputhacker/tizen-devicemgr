@@ -1387,7 +1387,11 @@ _e_devicemgr_viewport_apply_destination(E_Viewport *viewport, Eina_Rectangle *rr
           _buffer_size_get(epc, &prect.w, &prect.h);
      }
 
-   EINA_SAFETY_ON_FALSE_RETURN_VAL(prect.w > 0 && prect.h > 0, EINA_FALSE);
+   if (!(prect.w > 0 && prect.h > 0))
+     {
+        PWR("prect.w > 0 && prect.h > 0 is false");
+        return EINA_FALSE;
+     }
 
    switch (viewport->type)
      {
@@ -1466,7 +1470,7 @@ _e_devicemgr_viewport_apply_source(E_Viewport *viewport)
 
    if (!eina_rectangle_intersection(&rect, &viewport->cropped_source))
      {
-        PER("source area is empty");
+        PWR("source area is empty");
         return EINA_FALSE;
      }
 
