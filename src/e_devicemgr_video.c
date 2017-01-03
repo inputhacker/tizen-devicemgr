@@ -71,11 +71,19 @@ struct _E_Video
    E_Devmgr_Buf *next_fb;
 
    /* attributes */
+   Eina_List *tdm_prop_list;
    int tdm_mute_id;
 
    Eina_Bool  cb_registered;
    Eina_Bool  parent_cb_registered;
 };
+
+typedef struct _Tdm_Prop_Value
+{
+   unsigned int id;
+   char name[TDM_NAME_LEN];
+   tdm_value value;
+} Tdm_Prop_Value;
 
 static Eina_List *video_list;
 
@@ -1072,6 +1080,14 @@ _e_video_frame_buffer_show(E_Video *video, E_Devmgr_Buf *mbuf)
              VER("set layer failed");
              return EINA_FALSE;
           }
+        // need call tdm property in list
+        Tdm_Prop_Value *prop;
+        Eina_List *l = NULL;
+        EINA_LIST_FOREACH(video->tdm_prop_list, l, prop)
+          {
+             VIN("call property(%s), value(%d)", prop->name, (unsigned int)prop->value.u32);
+             tdm_layer_set_property(video->layer, prop->id, prop->value);
+          }
      }
 
    CLEAR(old_info);
@@ -1300,15 +1316,6 @@ _e_video_create(struct wl_resource *video_object, struct wl_resource *surface)
 
    _e_video_set(video, ec);
 
-   if(!_e_video_parent_is_viewable(video) && !e_pixmap_resource_get(video->ec->pixmap))
-     {
-        if (video->layer)
-          {
-             VIN("unset layer: parent not viewable");
-             _e_video_set_layer(video, EINA_FALSE);
-          }
-     }
-
    return video;
 }
 
@@ -1366,18 +1373,8 @@ _e_video_set(E_Video *video, E_Client *ec)
         EINA_SAFETY_ON_NULL_RETURN(video->output);
      }
 
-   VIN("set layer: create");
-   if (_e_video_set_layer(video, EINA_TRUE))
-     {
-        VIN("video client");
-        ec->comp_data->video_client = 1;
-     }
-   else
-     {
-        VIN("no video client");
-        ec->comp_data->video_client = 0;
-        ec->animatable = 0;
-     }
+   VIN("video client");
+   ec->comp_data->video_client = 1;
 
    if (video_to_primary)
      {
@@ -1523,9 +1520,20 @@ _e_video_destroy(E_Video *video)
         e_devmgr_buffer_unref(mbuf);
      }
 
+   if(video->tdm_prop_list)
+     {
+        Tdm_Prop_Value *tdm_prop;
+        EINA_LIST_FREE(video->tdm_prop_list, tdm_prop)
+          {
+             free(tdm_prop);
+          }
+     }
+
    if (video->input_buffer_list)
      NEVER_GET_HERE();
    if (video->pp_buffer_list)
+     NEVER_GET_HERE();
+   if (video->tdm_prop_list)
      NEVER_GET_HERE();
 
    /* destroy converter second */
@@ -1948,46 +1956,70 @@ _e_devicemgr_video_object_cb_set_attribute(struct wl_client *client,
    E_Video *video;
    int i, count = 0;
    const tdm_prop *props;
+   tdm_layer *layer;
+   Eina_Bool available = EINA_FALSE;
 
    video = wl_resource_get_user_data(resource);
    EINA_SAFETY_ON_NULL_RETURN(video);
 
-   if (!video->layer)
-     {
-        VIN("set layer: set_attribute");
-        if (!_e_video_set_layer(video, EINA_TRUE))
-          {
-             VER("set layer failed");
-             return;
-          }
-     }
-
-   tdm_layer_get_available_properties(video->layer, &props, &count);
-
-   if(!strncmp(name, "mute", TDM_NAME_LEN) && video->ec)
+   if(video->ec)
       VDT("Client(%s):PID(%d) RscID(%d) Attribute:%s, Value:%d",
           e_client_util_name_get(video->ec) ?: "No Name",
           video->ec->netwm.pid, wl_resource_get_id(video->surface),
           name,value);
 
+   // check available property & count
+   layer = e_devicemgr_tdm_video_layer_get(video->output);
+   tdm_layer_get_available_properties(layer, &props, &count);
+
    for (i = 0; i < count; i++)
      {
         if (!strncmp(name, props[i].name, TDM_NAME_LEN))
           {
-             tdm_value v = {.u32 = value};
-             tdm_layer_set_property(video->layer, props[i].id, v);
-             VDB("property(%s) value(%d)", name, value);
+             available = EINA_TRUE;
+             VDB("check property(%s) value(%d)", name, value);
              break;
           }
      }
 
-   if(!_e_video_parent_is_viewable(video) && !e_pixmap_resource_get(video->ec->pixmap))
+   if(!available)
+      {
+         VIN("no available property");
+         return;
+      }
+
+   // check set video layer
+   if(!video->layer)
      {
-        if (video->layer)
+        VIN("no layer: save property value");
+
+        Tdm_Prop_Value *prop = NULL;
+        const Eina_List *l = NULL;
+
+        EINA_LIST_FOREACH(video->tdm_prop_list, l, prop)
           {
-             VIN("unset layer: parent not viewable");
-             _e_video_set_layer(video, EINA_FALSE);
+             if (!strncmp(name, prop->name, TDM_NAME_LEN))
+               {
+                  VDB("find prop data(%s) update value(%d -> %d)", prop->name, (unsigned int)prop->value.u32, (unsigned int)value);
+                  prop->value.u32 = value;
+                  return;
+               }
           }
+
+        prop = calloc(1, sizeof(Tdm_Prop_Value));
+        if(!prop) return;
+        prop->value.u32 = value;
+        prop->id = props[i].id;
+        memcpy(prop->name, props[i].name, sizeof(props[i].name));
+        VDB("Add property(%s) value(%d)", prop->name, value);
+        video->tdm_prop_list = eina_list_append(video->tdm_prop_list, prop);
+     }
+   // if set layer call property
+   else
+     {
+        tdm_value v = {.u32 = value};
+        VIN("set layer: call property");
+        tdm_layer_set_property(video->layer, props[i].id, v);
      }
 }
 
