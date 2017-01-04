@@ -255,7 +255,7 @@ _e_video_set_layer(E_Video *video, Eina_Bool set)
           video->layer = e_devicemgr_tdm_avaiable_video_layer_get(video->output);
         if (!video->layer)
           {
-             VER("no available layer for video");
+             VWR("no available layer for video");
              return EINA_FALSE;
           }
         VIN("assign layer: %p", video->layer);
@@ -1324,7 +1324,8 @@ _e_video_set(E_Video *video, E_Client *ec)
 {
    int ominw = -1, ominh = -1, omaxw = -1, omaxh = -1;
    int i, count = 0;
-   tdm_display_capability capabilities;
+   tdm_display_capability disp_capabilities;
+   tdm_layer_capability lyr_capabilities;
    const tdm_prop *props;
    tdm_layer *layer;
 
@@ -1373,8 +1374,32 @@ _e_video_set(E_Video *video, E_Client *ec)
         EINA_SAFETY_ON_NULL_RETURN(video->output);
      }
 
-   VIN("video client");
-   ec->comp_data->video_client = 1;
+   layer = e_devicemgr_tdm_video_layer_get(video->output);
+   tdm_layer_get_capabilities(layer, &lyr_capabilities);
+
+   if (lyr_capabilities & TDM_LAYER_CAPABILITY_VIDEO)
+     {
+        /* If tdm offers video layers, we will assign a tdm layer when showing */
+        VIN("video client");
+        ec->comp_data->video_client = 1;
+     }
+   else
+     {
+        /* If tdm doesn't offer video layers, we assign a tdm layer now. If failed,
+         * video will be displayed via the UI rendering path.
+         */
+        if (_e_video_set_layer(video, EINA_TRUE))
+          {
+             VIN("video client");
+             ec->comp_data->video_client = 1;
+          }
+        else
+          {
+             VIN("no video client");
+             ec->comp_data->video_client = 0;
+             ec->animatable = 0;
+          }
+     }
 
    if (video_to_primary)
      {
@@ -1385,9 +1410,9 @@ _e_video_set(E_Video *video, E_Client *ec)
 
    tdm_output_get_available_size(video->output, &ominw, &ominh, &omaxw, &omaxh, &video->output_align);
 
-   tdm_display_get_capabilities(e_devmgr_dpy->tdm, &capabilities);
+   tdm_display_get_capabilities(e_devmgr_dpy->tdm, &disp_capabilities);
 
-   if (!(capabilities & TDM_DISPLAY_CAPABILITY_PP))
+   if (!(disp_capabilities & TDM_DISPLAY_CAPABILITY_PP))
      {
         video->video_align = video->output_align;
         tizen_video_object_send_size(video->video_object,
@@ -1434,7 +1459,6 @@ _e_video_set(E_Video *video, E_Client *ec)
             video->output_align, video->pp_align, video->video_align);
      }
 
-   layer = e_devicemgr_tdm_video_layer_get(video->output);
    tdm_layer_get_available_properties(layer, &props, &count);
    for (i = 0; i < count; i++)
      {
