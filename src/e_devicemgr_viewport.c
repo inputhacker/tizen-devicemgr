@@ -1502,8 +1502,8 @@ _e_devicemgr_viewport_apply_source(E_Viewport *viewport)
    return changed;
 }
 
-static Eina_Bool
-_e_devicemgr_viewport_apply(E_Client *ec)
+Eina_Bool
+e_devicemgr_viewport_apply(E_Client *ec)
 {
    E_Viewport *viewport;
    E_Client *subc;
@@ -1556,12 +1556,26 @@ _e_devicemgr_viewport_apply(E_Client *ec)
      PDB("%p buffer", ec->comp_data->buffer_ref.buffer);
 
    EINA_LIST_FOREACH(ec->comp_data->sub.list, l, subc)
-     _e_devicemgr_viewport_apply(subc);
+     e_devicemgr_viewport_apply(subc);
 
    EINA_LIST_FOREACH(ec->comp_data->sub.below_list, l, subc)
-     _e_devicemgr_viewport_apply(subc);
+     e_devicemgr_viewport_apply(subc);
 
    return EINA_TRUE;
+}
+
+Eina_Bool
+e_devicemgr_viewport_is_changed(E_Client *ec)
+{
+   E_Viewport *viewport;
+
+   if (!ec || !ec->comp_data || e_object_is_del(E_OBJECT(ec)))
+     return EINA_FALSE;
+
+   viewport = _e_devicemgr_viewport_get_viewport(ec->comp_data->scaler.viewport);
+   if(!viewport) return EINA_FALSE;
+
+   return viewport->changed;
 }
 
 static void
@@ -1591,7 +1605,7 @@ _e_devicemgr_viewport_cb_apply_viewport(struct wl_listener *listener, void *data
 
    PDB("apply");
 
-   if (!_e_devicemgr_viewport_apply(viewport->topmost))
+   if (!e_devicemgr_viewport_apply(viewport->topmost))
      {
         PER("failed to apply tizen_viewport");
         return;
@@ -1624,7 +1638,7 @@ _e_devicemgr_viewport_cb_topmost_show(void *data, Evas *e EINA_UNUSED, Evas_Obje
    E_Viewport *viewport = data;
 
    PDB("show start");
-   _e_devicemgr_viewport_apply(viewport->topmost);
+   e_devicemgr_viewport_apply(viewport->topmost);
    PDB("show end");
 }
 
@@ -1634,7 +1648,7 @@ _e_devicemgr_viewport_cb_topmost_resize(void *data, Evas *e EINA_UNUSED, Evas_Ob
    E_Viewport *viewport = data;
 
    PDB("resize start");
-   _e_devicemgr_viewport_apply(viewport->topmost);
+   e_devicemgr_viewport_apply(viewport->topmost);
    PDB("resize end");
 }
 
@@ -1644,7 +1658,7 @@ _e_devicemgr_viewport_cb_topmost_move(void *data, Evas *e EINA_UNUSED, Evas_Obje
    E_Viewport *viewport = data;
 
    PDB("move start");
-   _e_devicemgr_viewport_apply(viewport->topmost);
+   e_devicemgr_viewport_apply(viewport->topmost);
    PDB("move end");
 }
 
@@ -1658,7 +1672,7 @@ _e_devicemgr_viewport_cb_topmost_rotate(void *data, int type, void *event)
       return ECORE_CALLBACK_PASS_ON;
 
    PDB("rorate start");
-   _e_devicemgr_viewport_apply(viewport->topmost);
+   e_devicemgr_viewport_apply(viewport->topmost);
    PDB("rorate end");
 
    return ECORE_CALLBACK_PASS_ON;

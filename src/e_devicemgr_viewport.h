@@ -15,5 +15,7 @@ void e_devicemgr_viewport_fini(void);
 Eina_Bool e_devicemgr_viewport_create(struct wl_resource *resource,
                                       uint32_t id,
                                       struct wl_resource *surface);
+Eina_Bool e_devicemgr_viewport_apply(E_Client *ec);
+Eina_Bool e_devicemgr_viewport_is_changed(E_Client *ec);
 
 #endif

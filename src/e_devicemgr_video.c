@@ -1677,10 +1677,17 @@ _e_video_render(E_Video *video, const char *func)
    if (!wayland_tbm_server_get_surface(NULL, comp_buffer->resource))
      return;
 
+   topmost = find_topmost_parent_get(video->ec);
+   EINA_SAFETY_ON_NULL_RETURN(topmost);
+
+   if(e_devicemgr_viewport_is_changed(video->ec))
+     {
+        VIN("need update viewport: apply topmost");
+        e_devicemgr_viewport_apply(topmost);
+     }
+
    if (!_e_video_geometry_cal(video))
      {
-        topmost = find_topmost_parent_get(video->ec);
-        EINA_SAFETY_ON_NULL_RETURN(topmost);
         if(!video->parent_cb_registered && !_e_video_parent_is_viewable(video))
           {
              evas_object_event_callback_add(topmost->frame, EVAS_CALLBACK_SHOW,
