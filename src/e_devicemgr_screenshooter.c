@@ -134,11 +134,8 @@ _e_screenmirror_su_check(struct wl_client *client)
 
    wl_client_get_credentials(client, NULL, &uid, NULL);
 
-   if (uid == 0)
-     {
-        DBG("pass privilege check if super user");
-        return EINA_TRUE;
-     }
+   if (uid == 0) /* DBG("pass privilege check if super user"); */
+     return EINA_TRUE;
 
    return EINA_FALSE;
 }
@@ -657,26 +654,15 @@ _e_tz_screenmirror_buffer_free(E_Mirror_Buffer *buffer)
    E_FREE(buffer);
 }
 
-static Eina_Bool
-_e_tz_screenmirror_capture_oneshot_done(void *data)
-{
-   E_Mirror_Buffer *mirror_buffer = data;
-   E_Mirror *mirror = mirror_buffer->mirror;
-
-   _e_tz_screenmirror_destroy(mirror);
-
-   DBG("_e_tz_screenmirror_capture_oneshot_done");
-
-   return ECORE_CALLBACK_CANCEL;
-}
-
 static void
 _e_tz_screenmirror_capture_oneshot_done_handler(tdm_capture *capture, tbm_surface_h buffer, void *user_data)
 {
    E_Mirror_Buffer *mirror_buffer = user_data;
    E_Mirror *mirror = mirror_buffer->mirror;
 
-   mirror->timer = ecore_timer_add((double)1/DUMP_FPS, _e_tz_screenmirror_capture_oneshot_done, mirror_buffer);
+   _e_tz_screenmirror_destroy(mirror);
+
+   DBG("_e_tz_screenmirror_capture_oneshot_done");
 }
 
 static Eina_Bool
@@ -1275,8 +1261,6 @@ destroy_tz_screenmirror(struct wl_resource *resource)
    E_Mirror *mirror = wl_resource_get_user_data(resource);
 
    _e_tz_screenmirror_destroy(mirror);
-
-   keep_stream_mirror = NULL;
 }
 
 static void
