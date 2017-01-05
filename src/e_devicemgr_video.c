@@ -75,6 +75,7 @@ struct _E_Video
    int tdm_mute_id;
 
    Eina_Bool  cb_registered;
+   Eina_Bool  need_force_render;
 };
 
 typedef struct _Tdm_Prop_Value
@@ -291,6 +292,39 @@ _e_video_is_visible(E_Video *video)
      {
          VDB("evas obj invisible");
          return EINA_FALSE;
+     }
+
+   return EINA_TRUE;
+}
+
+static Eina_Bool
+_e_video_parent_is_viewable(E_Video *video)
+{
+   E_Client *topmost_parent;
+
+   if (e_object_is_del(E_OBJECT(video->ec))) return EINA_FALSE;
+
+   topmost_parent = find_topmost_parent_get(video->ec);
+
+   if (!topmost_parent)
+      return EINA_FALSE;
+
+   if (topmost_parent == video->ec)
+     {
+        VDB("There is no video parent surface");
+        return EINA_FALSE;
+     }
+
+   if (!topmost_parent->visible)
+     {
+        VDB("parent(0x%08"PRIxPTR") not viewable", (Ecore_Window)e_client_util_win_get(topmost_parent));
+        return EINA_FALSE;
+     }
+
+   if (!e_pixmap_resource_get(topmost_parent->pixmap))
+     {
+        VDB("parent(0x%08"PRIxPTR") no comp buffer", (Ecore_Window)e_client_util_win_get(topmost_parent));
+        return EINA_FALSE;
      }
 
    return EINA_TRUE;
@@ -1194,6 +1228,12 @@ _e_video_cb_evas_show(void *data, Evas *e EINA_UNUSED, Evas_Object *obj EINA_UNU
 
    if (e_object_is_del(E_OBJECT(video->ec))) return;
 
+   if (video->need_force_render)
+     {
+        VIN("video forcely rendering..");
+        _e_video_render(video, __FUNCTION__);
+     }
+
    /* if stand_alone is true, not show */
    if (video->ec->comp_data->sub.data && video->ec->comp_data->sub.data->stand_alone)
      {
@@ -1294,6 +1334,11 @@ _e_video_set(E_Video *video, E_Client *ec)
 
    video->ec = ec;
    video->window = e_client_util_win_get(ec);
+
+   evas_object_event_callback_add(video->ec->frame, EVAS_CALLBACK_HIDE,
+                                  _e_video_cb_evas_hide, video);
+   evas_object_event_callback_add(video->ec->frame, EVAS_CALLBACK_SHOW,
+                                  _e_video_cb_evas_show, video);
 
    if (dconfig->conf->eom_enable == EINA_TRUE)
      {
@@ -1463,11 +1508,12 @@ _e_video_destroy(E_Video *video)
                                             _e_video_cb_evas_resize, video);
         evas_object_event_callback_del_full(video->ec->frame, EVAS_CALLBACK_MOVE,
                                             _e_video_cb_evas_move, video);
-        evas_object_event_callback_del_full(video->ec->frame, EVAS_CALLBACK_HIDE,
-                                            _e_video_cb_evas_hide, video);
-        evas_object_event_callback_del_full(video->ec->frame, EVAS_CALLBACK_SHOW,
-                                            _e_video_cb_evas_show, video);
      }
+
+   evas_object_event_callback_del_full(video->ec->frame, EVAS_CALLBACK_HIDE,
+                                       _e_video_cb_evas_hide, video);
+   evas_object_event_callback_del_full(video->ec->frame, EVAS_CALLBACK_SHOW,
+                                       _e_video_cb_evas_show, video);
 
    wl_resource_set_destructor(video->video_object, NULL);
 
@@ -1655,11 +1701,20 @@ _e_video_render(E_Video *video, const char *func)
      }
 
    if (!_e_video_geometry_cal(video))
-     return;
+     {
+        if(!video->need_force_render && !_e_video_parent_is_viewable(video))
+          {
+             VIN("need force render");
+             video->need_force_render = EINA_TRUE;
+          }
+        return;
+     }
 
    if (!memcmp(&video->old_geo, &video->geo, sizeof video->geo) &&
        video->old_comp_buffer == comp_buffer)
      return;
+
+   video->need_force_render = EINA_FALSE;
 
    DBG("====================================== (%s)", func);
    VDB("old: "GEO_FMT" buf(%p)", GEO_ARG(&video->old_geo), video->old_comp_buffer);
@@ -1777,10 +1832,6 @@ done:
                                        _e_video_cb_evas_resize, video);
         evas_object_event_callback_add(video->ec->frame, EVAS_CALLBACK_MOVE,
                                        _e_video_cb_evas_move, video);
-        evas_object_event_callback_add(video->ec->frame, EVAS_CALLBACK_HIDE,
-                                       _e_video_cb_evas_hide, video);
-        evas_object_event_callback_add(video->ec->frame, EVAS_CALLBACK_SHOW,
-                                       _e_video_cb_evas_show, video);
         video->cb_registered = EINA_TRUE;
      }
    DBG("======================================.");
