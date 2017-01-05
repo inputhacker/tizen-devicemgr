@@ -19,7 +19,7 @@ BuildRequires: pkgconfig(tizen-extension-server)
 BuildRequires: pkgconfig(wayland-tbm-server)
 BuildRequires: pkgconfig(cynara-client)
 BuildRequires: pkgconfig(cynara-creds-socket)
-BuildRequires: pkgconfig(eom)
+BuildRequires: pkgconfig(eom-server)
 
 %global TZ_SYS_RO_SHARE  %{?TZ_SYS_RO_SHARE:%TZ_SYS_RO_SHARE}%{!?TZ_SYS_RO_SHARE:/usr/share}
 
