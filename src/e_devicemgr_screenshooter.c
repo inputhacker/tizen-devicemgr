@@ -1552,6 +1552,12 @@ _e_screenshooter_cb_shoot(struct wl_client *client,
         goto dump_done;
      }
 
+   if (e_devicemgr_dpms_get(mirror->drm_output))
+     {
+        ERR("_e_screenshooter_cb_shoot: dpms on fail");
+        goto dump_done;
+     }
+
    mirror->angle = _e_tz_screenmirror_get_angle();
    if (screenshot_auto_rotation)
      if (mirror->angle == 90 || mirror->angle == 270)
