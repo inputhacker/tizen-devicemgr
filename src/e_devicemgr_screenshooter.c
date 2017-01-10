@@ -919,6 +919,9 @@ _e_tz_screenmirror_buffer_queue(E_Mirror_Buffer *buffer)
      }
    else
      {
+        if (buffer->mbuf->type == TYPE_SHM)
+          return;
+
         if (_e_tz_screenmirror_tdm_capture_support(buffer, TDM_CAPTURE_CAPABILITY_STREAM))
           {
              _e_tz_screenmirror_drm_buffer_clear_check(buffer);
