@@ -36,6 +36,7 @@ typedef struct _E_Mirror
    tdm_output *tdm_output;
    tdm_layer *tdm_primary_layer;
    tdm_capture *capture;
+   Ecore_Timer *capture_timer;
 
    /* vblank info */
    int per_vblank;
@@ -726,7 +727,7 @@ _e_tz_screenmirror_capture_stream_done_handler(tdm_capture *capture, tbm_surface
    if (mirror->started == EINA_FALSE)
      {
         if (eina_list_count(mirror->buffer_queue) == 0)
-          mirror->timer = ecore_timer_add((double)1/DUMP_FPS, _e_tz_screenmirror_capture_stream_done, mirror);
+          mirror->capture_timer = ecore_timer_add((double)1/DUMP_FPS, _e_tz_screenmirror_capture_stream_done, mirror);
      }
 }
 
@@ -888,11 +889,39 @@ _e_tz_screenmirror_tdm_capture_support(E_Mirror_Buffer *buffer, tdm_capture_capa
    return EINA_FALSE;
 }
 
+static Eina_Bool
+_e_tz_screenmirror_capture_cb_timeout(void *data)
+{
+   E_Mirror *mirror = data;
+   E_Mirror_Buffer *buffer;
+   Eina_List *l;
+
+   EINA_SAFETY_ON_NULL_GOTO(mirror, done);
+
+   EINA_LIST_FOREACH(mirror->buffer_queue, l, buffer)
+     {
+        if (!buffer->in_use) break;
+     }
+
+   /* can be null when client doesn't queue a buffer previously */
+   if (!buffer)
+     goto done;
+
+   buffer->in_use = EINA_TRUE;
+
+   _e_tz_screenmirror_buffer_dequeue(buffer);
+
+done:
+   return ECORE_CALLBACK_RENEW;
+}
+
 static void
 _e_tz_screenmirror_buffer_queue(E_Mirror_Buffer *buffer)
 {
    E_Mirror *mirror = buffer->mirror;
    tdm_error err = TDM_ERROR_NONE;
+   E_Mirror_Buffer *buffer_list;
+   Eina_List *l;
 
    mirror->buffer_queue = eina_list_append(mirror->buffer_queue, buffer);
 
@@ -908,11 +937,45 @@ _e_tz_screenmirror_buffer_queue(E_Mirror_Buffer *buffer)
           {
              _e_tz_screenmirror_drm_buffer_clear_check(buffer);
 
-             err = tdm_capture_attach(mirror->capture, buffer->mbuf->tbm_surface);
-             EINA_SAFETY_ON_FALSE_RETURN(err == TDM_ERROR_NONE);
+             if (e_devicemgr_dpms_get(mirror->drm_output))
+               {
+                  if (!mirror->timer)
+                    {
+                       eina_list_free(mirror->buffer_clear_check);
+                       mirror->buffer_clear_check = NULL;
+                       _e_tz_screenmirror_drm_buffer_clear_check(buffer);
+                       mirror->timer = ecore_timer_add((double)1/DUMP_FPS, _e_tz_screenmirror_capture_cb_timeout, mirror);
+                    }
+                  EINA_SAFETY_ON_NULL_RETURN(mirror->timer);
+                  return;
+               }
+             else if (mirror->timer)
+               {
+                  ecore_timer_del(mirror->timer);
+                  mirror->timer = NULL;
+                  EINA_LIST_FOREACH(mirror->buffer_queue, l, buffer_list)
+                    {
+                       if (!buffer_list->in_use)
+                         {
+                            buffer_list->in_use = EINA_TRUE;
 
-             err = tdm_capture_commit(mirror->capture);
-             EINA_SAFETY_ON_FALSE_RETURN(err == TDM_ERROR_NONE);
+                            err = tdm_capture_attach(mirror->capture, buffer_list->mbuf->tbm_surface);
+                            EINA_SAFETY_ON_FALSE_RETURN(err == TDM_ERROR_NONE);
+                         }
+                    }
+                  err = tdm_capture_commit(mirror->capture);
+                  EINA_SAFETY_ON_FALSE_RETURN(err == TDM_ERROR_NONE);
+               }
+             else
+               {
+                  buffer->in_use = EINA_TRUE;
+
+                  err = tdm_capture_attach(mirror->capture, buffer->mbuf->tbm_surface);
+                  EINA_SAFETY_ON_FALSE_RETURN(err == TDM_ERROR_NONE);
+
+                  err = tdm_capture_commit(mirror->capture);
+                  EINA_SAFETY_ON_FALSE_RETURN(err == TDM_ERROR_NONE);
+               }
           }
         else
           _e_tz_screenmirror_watch_vblank(mirror);
@@ -925,6 +988,9 @@ _e_tz_screenmirror_buffer_queue(E_Mirror_Buffer *buffer)
         if (_e_tz_screenmirror_tdm_capture_support(buffer, TDM_CAPTURE_CAPABILITY_STREAM))
           {
              _e_tz_screenmirror_drm_buffer_clear_check(buffer);
+
+             if (e_devicemgr_dpms_get(mirror->drm_output))
+               return;
 
              err = tdm_capture_attach(mirror->capture, buffer->mbuf->tbm_surface);
              EINA_SAFETY_ON_FALSE_RETURN(err == TDM_ERROR_NONE);
@@ -1217,6 +1283,10 @@ _e_tz_screenmirror_destroy(E_Mirror *mirror)
    mirror->cynara_initialized = EINA_FALSE;
 #endif
 
+   if (mirror->capture_timer)
+     ecore_timer_del(mirror->capture_timer);
+   mirror->capture_timer = NULL;
+
    if (mirror->timer)
      ecore_timer_del(mirror->timer);
    mirror->timer = NULL;
@@ -1229,7 +1299,7 @@ _e_tz_screenmirror_destroy(E_Mirror *mirror)
 
    _e_tz_screenmirror_pp_destroy(mirror);
 
-   EINA_LIST_FREE(mirror->buffer_clear_check, mbuf);
+   eina_list_free(mirror->buffer_clear_check);
    mirror->buffer_clear_check = NULL;
 
    EINA_LIST_FOREACH_SAFE(mirror->buffer_queue, l, ll, buffer)
@@ -1377,6 +1447,14 @@ _e_tz_screenmirror_cb_start(struct wl_client *client EINA_UNUSED, struct wl_reso
 
    if (mirror->capture)
      {
+        if (e_devicemgr_dpms_get(mirror->drm_output))
+          {
+             if (!mirror->timer)
+               mirror->timer = ecore_timer_add((double)1/DUMP_FPS, _e_tz_screenmirror_capture_cb_timeout, mirror);
+             EINA_SAFETY_ON_NULL_RETURN(mirror->timer);
+             return;
+          }
+
         err = tdm_capture_commit(mirror->capture);
         EINA_SAFETY_ON_FALSE_RETURN(err == TDM_ERROR_NONE);
      }
