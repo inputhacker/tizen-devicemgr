@@ -1143,7 +1143,7 @@ _e_input_devmgr_generate_key_event(const char *key, Eina_Bool pressed)
    if (!e) return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NO_SYSTEM_RESOURCES;
 
    keycode = _e_input_devmgr_keycode_from_string(key);
-   if (keycode <= 0) return TIZEN_INPUT_DEVICE_MANAGER_ERROR_INVALID_PARAMETER;
+   if (keycode <= 0) goto finish;
 
    e->keyname = eina_stringshare_add(key);
    e->key = eina_stringshare_add(key);
@@ -1169,6 +1169,11 @@ _e_input_devmgr_generate_key_event(const char *key, Eina_Bool pressed)
      ecore_event_add(ECORE_EVENT_KEY_UP, e, _e_input_devmgr_keyevent_free, NULL);
 
    return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NONE;
+
+finish:
+    if(e)
+        free(e);
+    return TIZEN_INPUT_DEVICE_MANAGER_ERROR_INVALID_PARAMETER;
 }
 
 static void

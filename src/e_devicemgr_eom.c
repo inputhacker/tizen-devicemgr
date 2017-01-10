@@ -202,9 +202,9 @@ static E_EomOutputPtr _e_eom_output_get_by_id(int id);
 static E_EomOutputBufferPtr
 _e_eom_output_buff_create( E_EomOutputPtr eom_output, tbm_surface_h tbm_surface, E_EomEndShowingEventPtr cb_func, void *cb_user_data)
 {
+   EINA_SAFETY_ON_NULL_RETURN_VAL(tbm_surface, NULL);
    E_EomOutputBufferPtr outbuff = E_NEW(E_EomOutputBuffer, 1);
    EINA_SAFETY_ON_NULL_RETURN_VAL(outbuff, NULL);
-   EINA_SAFETY_ON_NULL_RETURN_VAL(tbm_surface, NULL);
 
    EOMDB("Allocate output buffer:%p", outbuff);
 
