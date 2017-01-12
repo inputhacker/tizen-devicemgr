@@ -158,6 +158,28 @@ find_video_with_surface(struct wl_resource *surface)
 }
 
 static E_Client*
+find_video_child_get(E_Client *ec)
+{
+   E_Client *subc = NULL;
+   Eina_List *l;
+   if (!ec) return NULL;
+   if (e_object_is_del(E_OBJECT(ec))) return NULL;
+   if (!ec->comp_data) return NULL;
+
+   if (ec->comp_data->video_client) return ec;
+
+   EINA_LIST_FOREACH(ec->comp_data->sub.below_list, l, subc)
+     {
+        E_Client *temp= NULL;
+        if (!subc->comp_data || e_object_is_del(E_OBJECT(subc))) continue;
+        temp = find_video_child_get(subc);
+        if(temp) return temp;
+     }
+
+   return NULL;
+}
+
+static E_Client*
 find_topmost_parent_get(E_Client *ec)
 {
    E_Client *parent = NULL;
@@ -1910,6 +1932,42 @@ _e_video_cb_ec_remove(void *data, int type, void *event)
 }
 
 static Eina_Bool
+_e_video_cb_ec_client_show(void *data, int type, void *event)
+{
+   E_Event_Client *ev = event;
+   E_Client *ec;
+   E_Client *video_ec = NULL;
+   E_Video *video = NULL;
+
+   EINA_SAFETY_ON_NULL_RETURN_VAL(ev, ECORE_CALLBACK_PASS_ON);
+   EINA_SAFETY_ON_NULL_RETURN_VAL(ev->ec, ECORE_CALLBACK_PASS_ON);
+
+   ec = ev->ec;
+   if (!ec->comp_data) return ECORE_CALLBACK_PASS_ON;
+
+   video_ec = find_video_child_get(ec);
+   if (!video_ec) return ECORE_CALLBACK_PASS_ON;
+
+   video = find_video_with_surface(video_ec->comp_data->surface);
+   if (!video) return ECORE_CALLBACK_PASS_ON;
+
+   VIN("client show: find video child(0x%08"PRIxPTR")", (Ecore_Window)e_client_util_win_get(video_ec));
+   if(video->old_comp_buffer)
+     {
+        VIN("video already rendering..");
+        return ECORE_CALLBACK_PASS_ON;
+     }
+
+   if(ec == find_topmost_parent_get(video->ec))
+     {
+       VIN("video need rendering..");
+       _e_video_render(video, __FUNCTION__);
+     }
+
+   return ECORE_CALLBACK_PASS_ON;
+}
+
+static Eina_Bool
 _e_video_cb_ec_visibility_change(void *data, int type, void *event)
 {
    E_Event_Remote_Surface_Provider *ev = event;
@@ -2234,6 +2292,8 @@ e_devicemgr_video_init(void)
                          _e_video_cb_ec_buffer_change, NULL);
    E_LIST_HANDLER_APPEND(video_hdlrs, E_EVENT_CLIENT_REMOVE,
                          _e_video_cb_ec_remove, NULL);
+   E_LIST_HANDLER_APPEND(video_hdlrs, E_EVENT_CLIENT_SHOW,
+                         _e_video_cb_ec_client_show, NULL);
    E_LIST_HANDLER_APPEND(video_hdlrs, E_EVENT_REMOTE_SURFACE_PROVIDER_VISIBILITY_CHANGE,
                          _e_video_cb_ec_visibility_change, NULL);
 
