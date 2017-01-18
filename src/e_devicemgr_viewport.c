@@ -835,7 +835,13 @@ _buffer_size_get(E_Client *ec, int *bw, int *bh)
 
    *bw = *bh = 0;
 
-   if (!buffer) return;
+   if (!buffer)
+     {
+        INF("no buffer. using ec(%p) size(%dx%d)", ec, ec->w, ec->h);
+        *bw = ec->w;
+        *bh = ec->h;
+        return;
+     }
 
    if (buffer->type == E_COMP_WL_BUFFER_TYPE_VIDEO)
      {
@@ -1510,7 +1516,7 @@ e_devicemgr_viewport_apply(E_Client *ec)
    Eina_List *l;
 
    if (!ec || !ec->comp_data || e_object_is_del(E_OBJECT(ec)))
-     return EINA_TRUE;
+     return EINA_FALSE;
 
    viewport = _e_devicemgr_viewport_get_viewport(ec->comp_data->scaler.viewport);
 
@@ -1568,14 +1574,25 @@ Eina_Bool
 e_devicemgr_viewport_is_changed(E_Client *ec)
 {
    E_Viewport *viewport;
+   E_Client *subc;
+   Eina_List *l;
 
    if (!ec || !ec->comp_data || e_object_is_del(E_OBJECT(ec)))
      return EINA_FALSE;
 
    viewport = _e_devicemgr_viewport_get_viewport(ec->comp_data->scaler.viewport);
-   if(!viewport) return EINA_FALSE;
+   if(viewport && viewport->changed)
+      return EINA_TRUE;
 
-   return viewport->changed;
+   EINA_LIST_FOREACH(ec->comp_data->sub.list, l, subc)
+     if (e_devicemgr_viewport_is_changed(subc))
+       return EINA_TRUE;
+
+   EINA_LIST_FOREACH(ec->comp_data->sub.below_list, l, subc)
+     if (e_devicemgr_viewport_is_changed(subc))
+       return EINA_TRUE;
+
+   return EINA_FALSE;
 }
 
 static void

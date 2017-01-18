@@ -1716,7 +1716,7 @@ _e_video_render(E_Video *video, const char *func)
    topmost = find_topmost_parent_get(video->ec);
    EINA_SAFETY_ON_NULL_RETURN(topmost);
 
-   if(e_devicemgr_viewport_is_changed(video->ec))
+   if(e_devicemgr_viewport_is_changed(topmost))
      {
         VIN("need update viewport: apply topmost");
         e_devicemgr_viewport_apply(topmost);
