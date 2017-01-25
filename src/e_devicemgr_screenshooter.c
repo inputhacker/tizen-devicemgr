@@ -66,6 +66,7 @@ typedef struct _E_Mirror
 typedef struct _E_Mirror_Buffer
 {
    E_Devmgr_Buf *mbuf;
+   E_Devmgr_Buf *tmp;
 
    E_Mirror *mirror;
 
@@ -260,7 +261,7 @@ _e_tz_screenmirror_rect_scale (int src_w, int src_h, int dst_w, int dst_h, Eina_
    if (src_w <= 0 || src_h <= 0 || dst_w <= 0 || dst_h <= 0 || !scale)
      return;
 
-   _e_tz_screenmirror_center_rect (src_w, src_h, dst_w, dst_h, &center);
+   _e_tz_screenmirror_center_rect(src_w, src_h, dst_w, dst_h, &center);
 
    ratio = (float)center.w / src_w;
 
@@ -631,9 +632,21 @@ _e_tz_screenmirror_dump_still(E_Mirror_Buffer *buffer)
 }
 
 static void
+_e_tz_screenmirror_copy_tmp_buffer(E_Mirror_Buffer *buffer)
+{
+   e_devmgr_buffer_copy(buffer->tmp, buffer->mbuf);
+
+   e_devmgr_buffer_unref(buffer->tmp);
+   buffer->tmp = NULL;
+}
+
+static void
 _e_tz_screenmirror_buffer_free(E_Mirror_Buffer *buffer)
 {
    E_Mirror *mirror = buffer->mirror;
+
+   if (buffer->tmp)
+      _e_tz_screenmirror_copy_tmp_buffer(buffer);
 
    /* then, dequeue and send dequeue event */
    _e_tz_screenmirror_buffer_dequeue(buffer);
@@ -660,6 +673,9 @@ _e_tz_screenmirror_capture_oneshot_done_handler(tdm_capture *capture, tbm_surfac
 {
    E_Mirror_Buffer *mirror_buffer = user_data;
    E_Mirror *mirror = mirror_buffer->mirror;
+
+   if (mirror_buffer->mbuf->type == TYPE_SHM)
+     _e_tz_screenmirror_copy_tmp_buffer(mirror_buffer);
 
    _e_tz_screenmirror_destroy(mirror);
 
@@ -696,8 +712,25 @@ _e_tz_screenmirror_mirrorbuf_find(E_Mirror *mirror, tbm_surface_h surf)
 
    EINA_LIST_FOREACH(mirror->buffer_queue, l, buffer)
      {
-        if (buffer && buffer->mbuf && buffer->mbuf->tbm_surface)
+        if (!buffer || !buffer->mbuf)
+          continue;
+
+        if (buffer->mbuf->type == TYPE_SHM)
           {
+             if (!buffer->tmp || !buffer->tmp->tbm_surface)
+               continue;
+
+             if (buffer->tmp->tbm_surface == surf)
+               {
+                  _e_tz_screenmirror_copy_tmp_buffer(buffer);
+                  return buffer;
+               }
+          }
+        else
+          {
+             if (!buffer->mbuf->tbm_surface)
+               continue;
+
              if (buffer->mbuf->tbm_surface == surf)
                return buffer;
           }
@@ -915,6 +948,28 @@ done:
    return ECORE_CALLBACK_RENEW;
 }
 
+static Eina_Bool
+_e_tz_screenmirror_tmp_buffer_create(E_Mirror_Buffer *buffer)
+{
+   tbm_surface_h tbm_surface = NULL;
+   E_Devmgr_Buf *mbuf = NULL;
+
+   tbm_surface = tbm_surface_create(buffer->mbuf->width, buffer->mbuf->height, buffer->mbuf->tbmfmt);
+   EINA_SAFETY_ON_NULL_RETURN_VAL(tbm_surface, EINA_FALSE);
+
+   mbuf = e_devmgr_buffer_create_tbm(tbm_surface);
+   if (mbuf == NULL)
+     {
+        tbm_surface_destroy(tbm_surface);
+        return EINA_FALSE;
+     }
+
+   e_devmgr_buffer_clear(mbuf);
+   buffer->tmp = mbuf;
+
+   return EINA_TRUE;
+}
+
 static void
 _e_tz_screenmirror_buffer_queue(E_Mirror_Buffer *buffer)
 {
@@ -927,12 +982,6 @@ _e_tz_screenmirror_buffer_queue(E_Mirror_Buffer *buffer)
 
    if (mirror->started)
      {
-        if (buffer->mbuf->type == TYPE_SHM)
-          {
-             _e_tz_screenmirror_watch_vblank(mirror);
-             return;
-          }
-
         if (_e_tz_screenmirror_tdm_capture_support(buffer, TDM_CAPTURE_CAPABILITY_STREAM))
           {
              _e_tz_screenmirror_drm_buffer_clear_check(buffer);
@@ -959,8 +1008,24 @@ _e_tz_screenmirror_buffer_queue(E_Mirror_Buffer *buffer)
                          {
                             buffer_list->in_use = EINA_TRUE;
 
-                            err = tdm_capture_attach(mirror->capture, buffer_list->mbuf->tbm_surface);
-                            EINA_SAFETY_ON_FALSE_RETURN(err == TDM_ERROR_NONE);
+                            if (buffer->mbuf->type == TYPE_SHM)
+                              {
+                                 if (!_e_tz_screenmirror_tmp_buffer_create(buffer))
+                                   return;
+
+                                 err = tdm_capture_attach(mirror->capture, buffer->tmp->tbm_surface);
+                                 if (err != TDM_ERROR_NONE)
+                                   {
+                                      e_devmgr_buffer_unref(buffer->tmp);
+                                      buffer->tmp = NULL;
+                                      return;
+                                   }
+                              }
+                            else
+                              {
+                                 err = tdm_capture_attach(mirror->capture, buffer_list->mbuf->tbm_surface);
+                                 EINA_SAFETY_ON_FALSE_RETURN(err == TDM_ERROR_NONE);
+                              }
                          }
                     }
                   err = tdm_capture_commit(mirror->capture);
@@ -970,9 +1035,24 @@ _e_tz_screenmirror_buffer_queue(E_Mirror_Buffer *buffer)
                {
                   buffer->in_use = EINA_TRUE;
 
-                  err = tdm_capture_attach(mirror->capture, buffer->mbuf->tbm_surface);
-                  EINA_SAFETY_ON_FALSE_RETURN(err == TDM_ERROR_NONE);
+                  if (buffer->mbuf->type == TYPE_SHM)
+                    {
+                       if (!_e_tz_screenmirror_tmp_buffer_create(buffer))
+                         return;
 
+                       err = tdm_capture_attach(mirror->capture, buffer->tmp->tbm_surface);
+                       if (err != TDM_ERROR_NONE)
+                         {
+                            e_devmgr_buffer_unref(buffer->tmp);
+                            buffer->tmp = NULL;
+                            return;
+                         }
+                    }
+                  else
+                    {
+                       err = tdm_capture_attach(mirror->capture, buffer->mbuf->tbm_surface);
+                       EINA_SAFETY_ON_FALSE_RETURN(err == TDM_ERROR_NONE);
+                    }
                   err = tdm_capture_commit(mirror->capture);
                   EINA_SAFETY_ON_FALSE_RETURN(err == TDM_ERROR_NONE);
                }
@@ -982,9 +1062,6 @@ _e_tz_screenmirror_buffer_queue(E_Mirror_Buffer *buffer)
      }
    else
      {
-        if (buffer->mbuf->type == TYPE_SHM)
-          return;
-
         if (_e_tz_screenmirror_tdm_capture_support(buffer, TDM_CAPTURE_CAPABILITY_STREAM))
           {
              _e_tz_screenmirror_drm_buffer_clear_check(buffer);
@@ -992,8 +1069,24 @@ _e_tz_screenmirror_buffer_queue(E_Mirror_Buffer *buffer)
              if (e_devicemgr_dpms_get(mirror->drm_output))
                return;
 
-             err = tdm_capture_attach(mirror->capture, buffer->mbuf->tbm_surface);
-             EINA_SAFETY_ON_FALSE_RETURN(err == TDM_ERROR_NONE);
+             if (buffer->mbuf->type == TYPE_SHM)
+               {
+                  if (!_e_tz_screenmirror_tmp_buffer_create(buffer))
+                    return;
+
+                  err = tdm_capture_attach(mirror->capture, buffer->tmp->tbm_surface);
+                  if (err != TDM_ERROR_NONE)
+                    {
+                       e_devmgr_buffer_unref(buffer->tmp);
+                       buffer->tmp = NULL;
+                       return;
+                    }
+               }
+             else
+               {
+                  err = tdm_capture_attach(mirror->capture, buffer->mbuf->tbm_surface);
+                  EINA_SAFETY_ON_FALSE_RETURN(err == TDM_ERROR_NONE);
+               }
           }
      }
 }
@@ -1028,16 +1121,29 @@ _e_tz_screenmirror_tdm_capture_oneshot(E_Mirror *mirror, E_Mirror_Buffer *buffer
 {
    tdm_error err = TDM_ERROR_NONE;
 
-   err = tdm_capture_attach(mirror->capture, buffer->mbuf->tbm_surface);
-   EINA_SAFETY_ON_FALSE_GOTO(err == TDM_ERROR_NONE, capture_fail);
+   if (buffer->mbuf->type == TYPE_SHM)
+     {
+        if (!_e_tz_screenmirror_tmp_buffer_create(buffer))
+          return EINA_FALSE;
+
+        err = tdm_capture_attach(mirror->capture, buffer->tmp->tbm_surface);
+        if (err != TDM_ERROR_NONE)
+          {
+             e_devmgr_buffer_unref(buffer->tmp);
+             buffer->tmp = NULL;
+             return EINA_FALSE;
+          }
+     }
+   else
+     {
+        err = tdm_capture_attach(mirror->capture, buffer->mbuf->tbm_surface);
+        EINA_SAFETY_ON_FALSE_RETURN_VAL(err == TDM_ERROR_NONE, EINA_FALSE);
+     }
 
    err = tdm_capture_commit(mirror->capture);
-   EINA_SAFETY_ON_FALSE_GOTO(err == TDM_ERROR_NONE, capture_fail);
+   EINA_SAFETY_ON_FALSE_RETURN_VAL(err == TDM_ERROR_NONE, EINA_FALSE);
 
    return EINA_TRUE;
-
-capture_fail:
-   return EINA_FALSE;
 }
 
 static void
@@ -1626,13 +1732,6 @@ _e_screenshooter_cb_shoot(struct wl_client *client,
 
    mirror->buffer_queue = eina_list_append(mirror->buffer_queue, buffer);
 
-   /* in case of shm, we dump only ui framebuffer */
-   if (buffer->mbuf->type == TYPE_SHM)
-     {
-        _e_tz_screenmirror_shm_dump(buffer);
-        goto dump_done;
-     }
-
    if (e_devicemgr_dpms_get(mirror->drm_output))
      {
         ERR("_e_screenshooter_cb_shoot: dpms on fail");
@@ -1655,7 +1754,13 @@ _e_screenshooter_cb_shoot(struct wl_client *client,
           }
      }
    else
-     _e_tz_screenmirror_dump_still(buffer);
+     {
+        /* in case of shm, we dump only ui framebuffer */
+        if (buffer->mbuf->type == TYPE_SHM)
+          _e_tz_screenmirror_shm_dump(buffer);
+        else
+          _e_tz_screenmirror_dump_still(buffer);
+     }
 
 dump_done:
    _e_tz_screenmirror_buffer_free(buffer);
