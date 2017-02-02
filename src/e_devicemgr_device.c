@@ -811,53 +811,72 @@ _e_input_devmgr_inputgen_client_cb_destroy(struct wl_listener *l, void *data)
    wl_list_remove(&l->link);
    E_FREE(l);
 
-   EINA_LIST_FOREACH_SAFE(input_devmgr_data->inputgen.clients, list, l_next, cdata)
+   EINA_LIST_FOREACH_SAFE(input_devmgr_data->inputgen.kbd.clients, list, l_next, cdata)
      {
         if (cdata->client == client)
           {
-             input_devmgr_data->inputgen.clients =
-                eina_list_remove_list(input_devmgr_data->inputgen.clients, list);
+             input_devmgr_data->inputgen.kbd.clients =
+                eina_list_remove_list(input_devmgr_data->inputgen.kbd.clients, list);
+             E_FREE(cdata);
+          }
+     }
+   EINA_LIST_FOREACH_SAFE(input_devmgr_data->inputgen.ptr.clients, list, l_next, cdata)
+     {
+        if (cdata->client == client)
+          {
+             input_devmgr_data->inputgen.ptr.clients =
+                eina_list_remove_list(input_devmgr_data->inputgen.ptr.clients, list);
+             E_FREE(cdata);
+          }
+     }
+   EINA_LIST_FOREACH_SAFE(input_devmgr_data->inputgen.touch.clients, list, l_next, cdata)
+     {
+        if (cdata->client == client)
+          {
+             input_devmgr_data->inputgen.touch.clients =
+                eina_list_remove_list(input_devmgr_data->inputgen.touch.clients, list);
              E_FREE(cdata);
           }
      }
 
-   if (eina_list_count(input_devmgr_data->inputgen.clients) == 0)
-     {
-        _e_input_devmgr_inputgen_generator_remove_keyboard();
-        _e_input_devmgr_inputgen_generator_remove_mouse();
-        _e_input_devmgr_inputgen_generator_remove_touch();
-     }
+   if (eina_list_count(input_devmgr_data->inputgen.kbd.clients) == 0)
+     _e_input_devmgr_inputgen_generator_remove_keyboard();
+   if (eina_list_count(input_devmgr_data->inputgen.ptr.clients) == 0)
+     _e_input_devmgr_inputgen_generator_remove_mouse();
+   if (eina_list_count(input_devmgr_data->inputgen.touch.clients) == 0)
+     _e_input_devmgr_inputgen_generator_remove_touch();
 }
 
 static void
-_e_input_devmgr_inputgen_client_add(struct wl_client *client)
+_e_input_devmgr_inputgen_client_add(struct wl_client *client, unsigned int clas)
 {
    struct wl_listener *destroy_listener;
-   e_devicemgr_inputgen_client_data *data;
+   e_devicemgr_inputgen_client_global_data *data;
    Eina_List *l;
 
-   EINA_LIST_FOREACH(input_devmgr_data->inputgen.clients, l, data)
+   EINA_LIST_FOREACH(input_devmgr_data->watched_clients, l, data)
      {
         if (data->client == client)
           {
-             data->ref++;
+             data->clas |= clas;
              return;
           }
      }
+   data = NULL;
 
    destroy_listener = E_NEW(struct wl_listener, 1);
    EINA_SAFETY_ON_NULL_GOTO(destroy_listener, failed);
    destroy_listener->notify = _e_input_devmgr_inputgen_client_cb_destroy;
    wl_client_add_destroy_listener(client, destroy_listener);
 
-   data = E_NEW(e_devicemgr_inputgen_client_data, 1);
-   EINA_SAFETY_ON_NULL_GOTO(data, failed);
+   data = E_NEW(e_devicemgr_inputgen_client_global_data, 1);
+   EINA_SAFETY_ON_NULL_GOTO(destroy_listener, failed);
 
    data->client = client;
-   data->ref = 1;
+   data->clas = clas;
 
-   input_devmgr_data->inputgen.clients =
-      eina_list_append(input_devmgr_data->inputgen.clients, data);
+   input_devmgr_data->watched_clients =
+      eina_list_append(input_devmgr_data->watched_clients, data);
 
    return;
 
@@ -867,15 +886,91 @@ failed:
         wl_list_remove(&destroy_listener->link);
         E_FREE(destroy_listener);
      }
-   if (data) E_FREE(data);
 }
 
-static Eina_Bool
-_e_input_devmgr_create_keyboard_device(void)
+static Eina_List **
+_e_input_devmgr_inputgen_util_list_get(unsigned int clas)
 {
-   int uinp_fd = -1;
+   if (clas == TIZEN_INPUT_DEVICE_MANAGER_CLAS_KEYBOARD)
+     return &input_devmgr_data->inputgen.kbd.clients;
+   else if (clas == TIZEN_INPUT_DEVICE_MANAGER_CLAS_MOUSE)
+     return &input_devmgr_data->inputgen.ptr.clients;
+   else if (clas == TIZEN_INPUT_DEVICE_MANAGER_CLAS_TOUCHSCREEN)
+     return &input_devmgr_data->inputgen.touch.clients;
+   else
+     return NULL;
+}
+
+static void
+_e_input_devmgr_inputgen_client_remove(struct wl_client *client, unsigned int clas)
+{
+   e_devicemgr_inputgen_client_global_data *data;
+   e_devicemgr_inputgen_client_data *cdata;
+   Eina_List *l, *l_next, **list;
+
+   list = _e_input_devmgr_inputgen_util_list_get(clas);
+   EINA_SAFETY_ON_NULL_RETURN(list);
+
+   EINA_LIST_FOREACH_SAFE(*list, l, l_next, cdata)
+     {
+        if (cdata->client == client)
+          {
+             cdata->ref--;
+             if (cdata->ref <= 0)
+               {
+                  *list = eina_list_remove_list(*list, l);
+               }
+          }
+     }
+
+   EINA_LIST_FOREACH(input_devmgr_data->watched_clients, l, data)
+     {
+        if (data->client == client)
+          {
+             data->clas &= ~clas;
+          }
+     }
+
+   if (eina_list_count(*list) == 0)
+     {
+        if (clas == TIZEN_INPUT_DEVICE_MANAGER_CLAS_KEYBOARD)
+          _e_input_devmgr_inputgen_generator_remove_keyboard();
+        else if (clas == TIZEN_INPUT_DEVICE_MANAGER_CLAS_MOUSE)
+          _e_input_devmgr_inputgen_generator_remove_mouse();
+        else if (clas == TIZEN_INPUT_DEVICE_MANAGER_CLAS_TOUCHSCREEN)
+          _e_input_devmgr_inputgen_generator_remove_touch();
+     }
+}
+
+static int
+_e_input_devmgr_create_keyboard_device(struct wl_client *client)
+{
+   int uinp_fd = -1, ret = -1;
    struct uinput_user_dev *uinp = &input_devmgr_data->inputgen.uinp;
-   int ret = -1;
+   Eina_List *l;
+   e_devicemgr_inputgen_client_data *data;
+
+   EINA_LIST_FOREACH(input_devmgr_data->inputgen.kbd.clients, l, data)
+     {
+        if (data->client == client)
+          {
+             data->ref++;
+             return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NONE;
+          }
+     }
+
+   data = NULL;
+   data = E_NEW(e_devicemgr_inputgen_client_data, 1);
+   EINA_SAFETY_ON_NULL_RETURN_VAL(data, TIZEN_INPUT_DEVICE_MANAGER_ERROR_NO_SYSTEM_RESOURCES);
+
+   data->ref = 1;
+   data->client = client;
+
+   input_devmgr_data->inputgen.kbd.clients =
+      eina_list_append(input_devmgr_data->inputgen.kbd.clients, data);
+
+   if (input_devmgr_data->inputgen.kbd.uinp_fd > 0)
+     return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NONE;
 
    uinp_fd = open("/dev/uinput", O_WRONLY | O_NDELAY);
    if ( uinp_fd < 0)
@@ -896,32 +991,55 @@ _e_input_devmgr_create_keyboard_device(void)
      {
         DMWRN("mouse Failed to write UINPUT device\n");
         close(uinp_fd);
-        return EINA_FALSE;
+        return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NO_SYSTEM_RESOURCES;
      }
    if (ioctl(uinp_fd, UI_DEV_CREATE))
      {
         DMWRN("mouse Unable to create UINPUT device\n");
         close(uinp_fd);
-        return EINA_FALSE;
+        return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NO_SYSTEM_RESOURCES;
      }
 
    input_devmgr_data->inputgen.kbd.uinp_fd = uinp_fd;
 
-   return EINA_TRUE;
+   return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NONE;
 }
 
 static Eina_Bool
-_e_input_devmgr_create_mouse_device(void)
+_e_input_devmgr_create_mouse_device(struct wl_client *client)
 {
-   int uinp_fd = -1;
+   int uinp_fd = -1, ret = -1;
    struct uinput_user_dev *uinp = &input_devmgr_data->inputgen.uinp;
-   int ret = -1;
+   Eina_List *l;
+   e_devicemgr_inputgen_client_data *data;
+
+   EINA_LIST_FOREACH(input_devmgr_data->inputgen.ptr.clients, l, data)
+     {
+        if (data->client == client)
+          {
+             data->ref++;
+             return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NONE;
+          }
+     }
+
+   data = NULL;
+   data = E_NEW(e_devicemgr_inputgen_client_data, 1);
+   EINA_SAFETY_ON_NULL_RETURN_VAL(data, TIZEN_INPUT_DEVICE_MANAGER_ERROR_NO_SYSTEM_RESOURCES);
+
+   data->ref = 1;
+   data->client = client;
+
+   input_devmgr_data->inputgen.ptr.clients =
+      eina_list_append(input_devmgr_data->inputgen.ptr.clients, data);
+
+   if (input_devmgr_data->inputgen.ptr.uinp_fd > 0)
+     return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NONE;
 
    uinp_fd = open("/dev/uinput", O_WRONLY | O_NDELAY);
    if ( uinp_fd < 0)
      {
         DMWRN("Failed to open /dev/uinput: (%d)\n", uinp_fd);
-        return EINA_FALSE;
+        return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NO_SYSTEM_RESOURCES;
      }
 
    ioctl(uinp_fd, UI_SET_EVBIT, EV_KEY);
@@ -943,32 +1061,55 @@ _e_input_devmgr_create_mouse_device(void)
      {
         DMWRN("mouse Failed to write UINPUT device\n");
         close(uinp_fd);
-        return EINA_FALSE;
+        return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NO_SYSTEM_RESOURCES;
      }
    if (ioctl(uinp_fd, UI_DEV_CREATE))
      {
         DMWRN("mouse Unable to create UINPUT device\n");
         close(uinp_fd);
-        return EINA_FALSE;
+        return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NO_SYSTEM_RESOURCES;
      }
 
    input_devmgr_data->inputgen.ptr.uinp_fd = uinp_fd;
 
-   return EINA_TRUE;
+   return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NONE;
 }
 
 static Eina_Bool
-_e_input_devmgr_create_touch_device(void)
+_e_input_devmgr_create_touch_device(struct wl_client *client)
 {
-   int uinp_fd = -1;
+   int uinp_fd = -1, ret = -1;
    struct uinput_user_dev *uinp = &input_devmgr_data->inputgen.uinp;
-   int ret = -1;
+   Eina_List *l;
+   e_devicemgr_inputgen_client_data *data;
+
+   EINA_LIST_FOREACH(input_devmgr_data->inputgen.touch.clients, l, data)
+     {
+        if (data->client == client)
+          {
+             data->ref++;
+             return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NONE;
+          }
+     }
+
+   data = NULL;
+   data = E_NEW(e_devicemgr_inputgen_client_data, 1);
+   EINA_SAFETY_ON_NULL_RETURN_VAL(data, TIZEN_INPUT_DEVICE_MANAGER_ERROR_NO_SYSTEM_RESOURCES);
+
+   data->ref = 1;
+   data->client = client;
+
+   input_devmgr_data->inputgen.touch.clients =
+      eina_list_append(input_devmgr_data->inputgen.touch.clients, data);
+
+   if (input_devmgr_data->inputgen.touch.uinp_fd > 0)
+     return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NONE;
 
    uinp_fd = open("/dev/uinput", O_WRONLY | O_NDELAY);
    if ( uinp_fd < 0)
      {
         DMWRN("Failed to open /dev/uinput: (%d)\n", uinp_fd);
-        return EINA_FALSE;
+        return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NO_SYSTEM_RESOURCES;
      }
 
    ioctl(uinp_fd, UI_SET_EVBIT, EV_KEY);
@@ -994,7 +1135,7 @@ _e_input_devmgr_create_touch_device(void)
      {
         DMWRN("mouse Failed to write UINPUT device\n");
         close(uinp_fd);
-        return EINA_FALSE;
+        return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NO_SYSTEM_RESOURCES;
      }
    else
      {
@@ -1004,20 +1145,20 @@ _e_input_devmgr_create_touch_device(void)
      {
         DMWRN("mouse Unable to create UINPUT device\n");
         close(uinp_fd);
-        return EINA_FALSE;
+        return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NO_SYSTEM_RESOURCES;
      }
 
    input_devmgr_data->inputgen.touch.uinp_fd = uinp_fd;
 
-   return EINA_TRUE;
+   return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NONE;
 }
 
 
 static void
-_e_input_devmgr_cb_init_generator(struct wl_client *client, struct wl_resource *resource)
+_e_input_devmgr_cb_init_generator(struct wl_client *client, struct wl_resource *resource, uint32_t clas)
 {
    struct uinput_user_dev *uinp = &input_devmgr_data->inputgen.uinp;
-   int ret = -1;
+   int ret = TIZEN_INPUT_DEVICE_MANAGER_ERROR_NONE;
 
 #ifdef ENABLE_CYNARA
    if (EINA_FALSE == _e_devicemgr_util_do_privilege_check(client, wl_client_get_fd(client), "http://tizen.org/privilege/inputgenerator"))
@@ -1028,53 +1169,33 @@ _e_input_devmgr_cb_init_generator(struct wl_client *client, struct wl_resource *
      }
 #endif
 
-   if (eina_list_count(input_devmgr_data->inputgen.clients) > 0)
+   if (!uinp->id.version)
      {
-        _e_input_devmgr_inputgen_client_add(client);
-        ret = TIZEN_INPUT_DEVICE_MANAGER_ERROR_NONE;
-        goto finish;
+        strncpy(uinp->name, "Input Generator", UINPUT_MAX_NAME_SIZE);
+        uinp->id.version = 4;
+        uinp->id.bustype = BUS_VIRTUAL;
      }
 
-   strncpy(uinp->name, "Input Generator", UINPUT_MAX_NAME_SIZE);
-   uinp->id.version = 4;
-   uinp->id.bustype = BUS_VIRTUAL;
+   if (clas & TIZEN_INPUT_DEVICE_MANAGER_CLAS_KEYBOARD)
+     ret = _e_input_devmgr_create_keyboard_device(client);
+   if (clas & TIZEN_INPUT_DEVICE_MANAGER_CLAS_MOUSE)
+     ret = _e_input_devmgr_create_mouse_device(client);
+   if (clas & TIZEN_INPUT_DEVICE_MANAGER_CLAS_TOUCHSCREEN)
+     ret = _e_input_devmgr_create_touch_device(client);
 
-   if (!_e_input_devmgr_create_keyboard_device())
-     {
-        DMWRN("Failed to create keyboard device\n");
-        ret = TIZEN_INPUT_DEVICE_MANAGER_ERROR_NO_SYSTEM_RESOURCES;
-        goto finish;
-     }
-   if (!_e_input_devmgr_create_mouse_device())
-     {
-        DMWRN("Failed to create mouse device\n");
-        _e_input_devmgr_inputgen_generator_remove_keyboard();
-        ret = TIZEN_INPUT_DEVICE_MANAGER_ERROR_NO_SYSTEM_RESOURCES;
-        goto finish;
-     }
-   if (!_e_input_devmgr_create_touch_device())
-     {
-        DMWRN("Failed to create touch device\n");
-        _e_input_devmgr_inputgen_generator_remove_keyboard();
-        _e_input_devmgr_inputgen_generator_remove_mouse();
-        ret = TIZEN_INPUT_DEVICE_MANAGER_ERROR_NO_SYSTEM_RESOURCES;
-        goto finish;
-     }
-
-   _e_input_devmgr_inputgen_client_add(client);
-
-   ret = TIZEN_INPUT_DEVICE_MANAGER_ERROR_NONE;
+   if (ret == TIZEN_INPUT_DEVICE_MANAGER_ERROR_NONE)
+     _e_input_devmgr_inputgen_client_add(client, clas);
 
 finish:
    tizen_input_device_manager_send_error(resource, ret);
 }
 
 static void
-_e_input_devmgr_cb_deinit_generator(struct wl_client *client, struct wl_resource *resource)
+_e_input_devmgr_cb_deinit_generator(struct wl_client *client, struct wl_resource *resource, uint32_t clas)
 {
    int ret = -1;
    Eina_List *l, *l_next;
-   e_devicemgr_inputgen_client_data *data;
+   e_devicemgr_inputgen_client_global_data *data;
    struct wl_listener *listener;
 
 #ifdef ENABLE_CYNARA
@@ -1086,31 +1207,28 @@ _e_input_devmgr_cb_deinit_generator(struct wl_client *client, struct wl_resource
      }
 #endif
 
-   EINA_LIST_FOREACH_SAFE(input_devmgr_data->inputgen.clients, l, l_next, data)
-     {
-        if (data->client == client)
-          {
-             data->ref--;
-             if (data->ref <= 0)
-               {
-                  listener = wl_client_get_destroy_listener(client,
-                     _e_input_devmgr_inputgen_client_cb_destroy);
-                  wl_list_remove(&listener->link);
-                  E_FREE(listener);
+   if (clas & TIZEN_INPUT_DEVICE_MANAGER_CLAS_KEYBOARD)
+     _e_input_devmgr_inputgen_client_remove(client, TIZEN_INPUT_DEVICE_MANAGER_CLAS_KEYBOARD);
+   if (clas & TIZEN_INPUT_DEVICE_MANAGER_CLAS_MOUSE)
+     _e_input_devmgr_inputgen_client_remove(client, TIZEN_INPUT_DEVICE_MANAGER_CLAS_MOUSE);
+   if (clas & TIZEN_INPUT_DEVICE_MANAGER_CLAS_TOUCHSCREEN)
+     _e_input_devmgr_inputgen_client_remove(client, TIZEN_INPUT_DEVICE_MANAGER_CLAS_TOUCHSCREEN);
 
-                  input_devmgr_data->inputgen.clients =
-                     eina_list_remove_list(input_devmgr_data->inputgen.clients, l);
-                  E_FREE(data);
-               }
+   EINA_LIST_FOREACH_SAFE(input_devmgr_data->watched_clients, l, l_next, data)
+     {
+        if (data->client == client && !data->clas)
+          {
+             listener = wl_client_get_destroy_listener(client,
+                        _e_input_devmgr_inputgen_client_cb_destroy);
+             wl_list_remove(&listener->link);
+             E_FREE(listener);
+
+             input_devmgr_data->watched_clients =
+                eina_list_remove_list(input_devmgr_data->watched_clients, l);
+             E_FREE(data);
+
              break;
           }
-     }
-
-   if (eina_list_count(input_devmgr_data->inputgen.clients) == 0)
-     {
-        _e_input_devmgr_inputgen_generator_remove_keyboard();
-        _e_input_devmgr_inputgen_generator_remove_mouse();
-        _e_input_devmgr_inputgen_generator_remove_touch();
      }
 
    ret = TIZEN_INPUT_DEVICE_MANAGER_ERROR_NONE;
@@ -1645,7 +1763,7 @@ e_devicemgr_device_fini(void)
    e_devicemgr_input_device_user_data *device_user_data;
    struct wl_listener *destroy_listener;
    Eina_List *l, *l_next;
-   struct wl_client *client;
+   e_devicemgr_inputgen_client_global_data *global_data;
 
    /* destroy the global seat resource */
    if (e_comp_wl->input_device_manager.global)
@@ -1693,17 +1811,21 @@ e_devicemgr_device_fini(void)
         input_devmgr_data->block_client = NULL;
      }
 
-   EINA_LIST_FOREACH_SAFE(input_devmgr_data->inputgen.clients, l, l_next, client)
+   E_FREE_LIST(input_devmgr_data->inputgen.kbd.clients, free);
+   E_FREE_LIST(input_devmgr_data->inputgen.ptr.clients, free);
+   E_FREE_LIST(input_devmgr_data->inputgen.touch.clients, free);
+
+   EINA_LIST_FOREACH_SAFE(input_devmgr_data->watched_clients, l, l_next, global_data)
      {
-        destroy_listener = wl_client_get_destroy_listener(client,
+        destroy_listener = wl_client_get_destroy_listener(global_data->client,
                                                           _e_input_devmgr_inputgen_client_cb_destroy);
         if (destroy_listener)
           {
              wl_list_remove(&destroy_listener->link);
              E_FREE(destroy_listener);
           }
-        input_devmgr_data->inputgen.clients =
-           eina_list_remove(input_devmgr_data->inputgen.clients, client);
+        input_devmgr_data->watched_clients =
+           eina_list_remove_list(input_devmgr_data->watched_clients, l);
      }
 
    E_FREE_LIST(input_devmgr_data->pressed_keys, free);

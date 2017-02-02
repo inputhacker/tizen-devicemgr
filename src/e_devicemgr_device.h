@@ -41,6 +41,7 @@
 typedef struct _e_devicemgr_input_devmgr_data e_devicemgr_input_devmgr_data;
 typedef struct _e_devicemgr_input_device_user_data e_devicemgr_input_device_user_data;
 typedef struct _e_devicemgr_inputgen_client_data e_devicemgr_inputgen_client_data;
+typedef struct _e_devicemgr_inputgen_client_global_data e_devicemgr_inputgen_client_global_data;
 
 struct _e_devicemgr_input_device_user_data
 {
@@ -53,6 +54,12 @@ struct _e_devicemgr_inputgen_client_data
 {
    struct wl_client *client;
    int ref;
+};
+
+struct _e_devicemgr_inputgen_client_global_data
+{
+   struct wl_client *client;
+   unsigned int clas;
 };
 
 struct _e_devicemgr_input_devmgr_data
@@ -76,25 +83,29 @@ struct _e_devicemgr_input_devmgr_data
       {
          int uinp_fd;
          char *uinp_identifier;
+         Eina_List *clients;
       } kbd;
       struct
       {
          int uinp_fd;
          char *uinp_identifier;
+         Eina_List *clients;
       } ptr;
       struct
       {
          int uinp_fd;
          char *uinp_identifier;
+         Eina_List *clients;
       } touch;
-      Eina_List *clients;
    }inputgen;
 
    struct
    {
       char *identifier;
       int wheel_click_angle;
-   }detent;
+   } detent;
+
+   Eina_List *watched_clients;
 };
 
 int e_devicemgr_device_init(void);
