@@ -76,6 +76,7 @@ struct _E_Video
 
    Eina_Bool  cb_registered;
    Eina_Bool  need_force_render;
+   Eina_Bool  follow_topmost_visibility;
 };
 
 typedef struct _Tdm_Prop_Value
@@ -1258,7 +1259,8 @@ _e_video_cb_evas_show(void *data, Evas *e EINA_UNUSED, Evas_Object *obj EINA_UNU
      }
 
    /* if stand_alone is true, not show */
-   if (video->ec->comp_data->sub.data && video->ec->comp_data->sub.data->stand_alone)
+   if ((video->ec->comp_data->sub.data && video->ec->comp_data->sub.data->stand_alone) ||
+       (video->ec->comp_data->sub.data && video->follow_topmost_visibility))
      {
         if (!video->layer) return;
 
@@ -1998,6 +2000,41 @@ _e_video_cb_ec_visibility_change(void *data, int type, void *event)
    return ECORE_CALLBACK_PASS_ON;
 }
 
+static Eina_Bool
+_e_video_cb_topmost_ec_visibility_change(void *data, int type, void *event)
+{
+   E_Event_Client *ev = event;
+   E_Client *ec = ev->ec;
+   E_Video *video;
+   Eina_List *l = NULL;
+
+   EINA_LIST_FOREACH(video_list, l, video)
+     {
+        E_Client *topmost = find_topmost_parent_get(video->ec);
+        if (!topmost) continue;
+        if (topmost == video->ec) continue;
+        if (topmost != ec) continue;
+        if (video->follow_topmost_visibility)
+          {
+             switch (ec->visibility.obscured)
+               {
+                case E_VISIBILITY_FULLY_OBSCURED:
+                   VIN("follow_topmost_visibility: fully_obscured");
+                   _e_video_cb_evas_hide(video, NULL, NULL, NULL);
+                  break;
+                case E_VISIBILITY_UNOBSCURED:
+                   VIN("follow_topmost_visibility: UNOBSCURED");
+                   _e_video_cb_evas_show(video, NULL, NULL, NULL);
+                  break;
+                default:
+                   return ECORE_CALLBACK_PASS_ON;
+               }
+          }
+     }
+
+   return ECORE_CALLBACK_PASS_ON;
+}
+
 static void
 _e_devicemgr_video_object_destroy(struct wl_resource *resource)
 {
@@ -2100,10 +2137,48 @@ _e_devicemgr_video_object_cb_set_attribute(struct wl_client *client,
      }
 }
 
+static void
+_e_devicemgr_video_object_cb_follow_topmost_visibility(struct wl_client *client,
+                                           struct wl_resource *resource)
+{
+   E_Video *video;
+
+   video = wl_resource_get_user_data(resource);
+   EINA_SAFETY_ON_NULL_RETURN(video);
+
+   if(!video->ec || video->follow_topmost_visibility)
+     return;
+
+   VIN("set follow_topmost_visibility");
+
+   video->follow_topmost_visibility= EINA_TRUE;
+
+}
+
+static void
+_e_devicemgr_video_object_cb_unfollow_topmost_visibility(struct wl_client *client,
+                                           struct wl_resource *resource)
+{
+   E_Video *video;
+
+   video = wl_resource_get_user_data(resource);
+   EINA_SAFETY_ON_NULL_RETURN(video);
+
+   if(!video->ec || !video->follow_topmost_visibility)
+     return;
+
+   VIN("unset follow_topmost_visibility");
+
+   video->follow_topmost_visibility= EINA_FALSE;
+
+}
+
 static const struct tizen_video_object_interface _e_devicemgr_video_object_interface =
 {
    _e_devicemgr_video_object_cb_destroy,
    _e_devicemgr_video_object_cb_set_attribute,
+   _e_devicemgr_video_object_cb_follow_topmost_visibility,
+   _e_devicemgr_video_object_cb_unfollow_topmost_visibility,
 };
 
 static void
@@ -2297,6 +2372,8 @@ e_devicemgr_video_init(void)
                          _e_video_cb_ec_client_show, NULL);
    E_LIST_HANDLER_APPEND(video_hdlrs, E_EVENT_REMOTE_SURFACE_PROVIDER_VISIBILITY_CHANGE,
                          _e_video_cb_ec_visibility_change, NULL);
+   E_LIST_HANDLER_APPEND(video_hdlrs, E_EVENT_CLIENT_VISIBILITY_CHANGE,
+                         _e_video_cb_topmost_ec_visibility_change, NULL);
 
    return 1;
 }
