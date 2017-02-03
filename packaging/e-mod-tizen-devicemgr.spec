@@ -1,5 +1,5 @@
 Name: e-mod-tizen-devicemgr
-Version: 0.1.54
+Version: 0.1.55
 Release: 1
 Summary: The devicemgr for enlightenment modules
 URL: http://www.enlightenment.org
