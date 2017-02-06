@@ -79,6 +79,11 @@ Eina_Bool     _e_devmgr_buffer_valid      (E_Devmgr_Buf *mbuf, const char *func)
 #define MBUF_IS_VALID(b)                  _e_devmgr_buffer_valid(b,__FUNCTION__)
 #define MSTAMP(b)                         ((b)?(b)->stamp:0)
 
+#define e_devmgr_buffer_set_use(b, v)    \
+   do { \
+      if (b) b->in_use = v; \
+   } while (0)
+
 typedef void (*MBuf_Free_Func) (E_Devmgr_Buf *mbuf, void *data);
 void      e_devmgr_buffer_free_func_add(E_Devmgr_Buf *mbuf, MBuf_Free_Func func, void *data);
 void      e_devmgr_buffer_free_func_del(E_Devmgr_Buf *mbuf, MBuf_Free_Func func, void *data);

@@ -369,7 +369,7 @@ _e_video_input_buffer_cb_free(E_Devmgr_Buf *mbuf, void *data)
    if (video->current_fb == mbuf)
      {
         VIN("current fb destroyed");
-        video->current_fb->in_use = EINA_FALSE;
+        e_devmgr_buffer_set_use(video->current_fb, EINA_FALSE);
         video->current_fb = NULL;
         need_hide = EINA_TRUE;
       }
@@ -377,7 +377,7 @@ _e_video_input_buffer_cb_free(E_Devmgr_Buf *mbuf, void *data)
    if (video->next_fb == mbuf)
      {
         VIN("next fb destroyed");
-        video->next_fb->in_use = EINA_FALSE;
+        e_devmgr_buffer_set_use(video->next_fb, EINA_FALSE);
         video->next_fb = NULL;
         need_hide = EINA_TRUE;
       }
@@ -491,13 +491,13 @@ _e_video_pp_buffer_cb_free(E_Devmgr_Buf *mbuf, void *data)
 
    if (video->current_fb == mbuf)
      {
-        video->current_fb->in_use = EINA_FALSE;
+        e_devmgr_buffer_set_use(video->current_fb, EINA_FALSE);
         video->current_fb = NULL;
       }
 
    if (video->next_fb == mbuf)
      {
-        video->next_fb->in_use = EINA_FALSE;
+        e_devmgr_buffer_set_use(video->next_fb, EINA_FALSE);
         video->next_fb = NULL;
       }
 
@@ -538,7 +538,7 @@ _e_video_pp_buffer_get(E_Video *video, int width, int height)
                   tdm_buffer_remove_release_handler(mbuf->tbm_surface,
                                                     _e_video_pp_buffer_cb_release, mbuf);
                   /* free forcely */
-                  mbuf->in_use = EINA_FALSE;
+                  e_devmgr_buffer_set_use(mbuf, EINA_FALSE);
                   e_devmgr_buffer_unref(mbuf);
                }
              if (video->pp_buffer_list)
@@ -1029,7 +1029,7 @@ _e_video_commit_handler(tdm_layer *layer, unsigned int sequence,
 
    if (video->current_fb && MBUF_IS_VALID(video->current_fb))
      {
-        video->current_fb->in_use = EINA_FALSE;
+        e_devmgr_buffer_set_use(video->current_fb, EINA_FALSE);
 
         /* if client attachs the same wl_buffer twice, current_fb and next_fb can be same.
          * so we have to keep the reference for it
@@ -1193,7 +1193,7 @@ _e_video_buffer_show(E_Video *video, E_Devmgr_Buf *mbuf, unsigned int transform)
 {
    mbuf->content_t = transform;
 
-   mbuf->in_use = EINA_TRUE;
+   e_devmgr_buffer_set_use(mbuf, EINA_TRUE);
 
    if (mbuf->comp_buffer)
      e_comp_wl_buffer_reference(&mbuf->buffer_ref, mbuf->comp_buffer);
@@ -1222,7 +1222,7 @@ _e_video_buffer_show(E_Video *video, E_Devmgr_Buf *mbuf, unsigned int transform)
 
 no_commit:
    video->next_fb = NULL;
-   mbuf->in_use = EINA_FALSE;
+   e_devmgr_buffer_set_use(mbuf, EINA_FALSE);
    _e_video_commit_handler(NULL, 0, 0, 0, video);
    return;
 }
@@ -1501,13 +1501,13 @@ _e_video_hide(E_Video *video)
 
    if (video->current_fb)
      {
-        video->current_fb->in_use = EINA_FALSE;
+        e_devmgr_buffer_set_use(video->current_fb, EINA_FALSE);
         video->current_fb = NULL;
       }
 
    if (video->next_fb)
      {
-        video->next_fb->in_use = EINA_FALSE;
+        e_devmgr_buffer_set_use(video->next_fb, EINA_FALSE);
         video->next_fb = NULL;
       }
 
@@ -1547,7 +1547,7 @@ _e_video_destroy(E_Video *video)
    /* others */
    EINA_LIST_FOREACH_SAFE(video->input_buffer_list, l, ll, mbuf)
      {
-        mbuf->in_use = EINA_FALSE;
+        e_devmgr_buffer_set_use(mbuf, EINA_FALSE);
         e_devmgr_buffer_unref(mbuf);
      }
 
@@ -1555,7 +1555,7 @@ _e_video_destroy(E_Video *video)
      {
         tdm_buffer_remove_release_handler(mbuf->tbm_surface,
                                           _e_video_pp_buffer_cb_release, mbuf);
-        mbuf->in_use = EINA_FALSE;
+        e_devmgr_buffer_set_use(mbuf, EINA_FALSE);
         e_devmgr_buffer_unref(mbuf);
      }
 
@@ -1666,7 +1666,7 @@ _e_video_pp_cb_done(tdm_pp *pp, tbm_surface_h sb, tbm_surface_h db, void *user_d
    pp_buffer = _e_video_mbuf_find(video->pp_buffer_list, db);
    if (pp_buffer)
      {
-        pp_buffer->in_use = EINA_FALSE;
+        e_devmgr_buffer_set_use(pp_buffer, EINA_FALSE);
         if (!_e_video_is_visible(video)) return;
 
         _e_video_buffer_show(video, pp_buffer, 0);
@@ -1831,13 +1831,13 @@ _e_video_render(E_Video *video, const char *func)
    if (tdm_pp_attach(video->pp, input_buffer->tbm_surface, pp_buffer->tbm_surface))
      goto render_fail;
 
-   pp_buffer->in_use = EINA_TRUE;
+   e_devmgr_buffer_set_use(pp_buffer, EINA_TRUE);
 
    e_comp_wl_buffer_reference(&input_buffer->buffer_ref, comp_buffer);
 
    if (tdm_pp_commit(video->pp))
      {
-       pp_buffer->in_use = EINA_FALSE;
+       e_devmgr_buffer_set_use(pp_buffer, EINA_FALSE);
        goto render_fail;
      }
 
