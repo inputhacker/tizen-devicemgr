@@ -65,10 +65,14 @@ struct _E_Video
    int pp_minw, pp_minh, pp_maxw, pp_maxh;
    int video_align;
 
-   /* vblank handling */
-   Eina_List  *waiting_list;
-   E_Devmgr_Buf *current_fb;
-   E_Devmgr_Buf *next_fb;
+   /* When a video buffer be attached, it will be appended to the end of waiting_list .
+    * And when it's committed, it will be moved to committed_list.
+    * Finally when the commit handler is called, it will become current_fb.
+    */
+   Eina_List    *waiting_list;   /* buffers which are not committed yet */
+   Eina_List    *committed_list; /* buffers which are committed, but not shown on screen yet */
+   E_Devmgr_Buf *current_fb;     /* buffer which is showing on screen currently */
+   Eina_Bool     waiting_vblank;
 
    /* attributes */
    Eina_List *tdm_prop_list;
@@ -374,11 +378,11 @@ _e_video_input_buffer_cb_free(E_Devmgr_Buf *mbuf, void *data)
         need_hide = EINA_TRUE;
       }
 
-   if (video->next_fb == mbuf)
+   if (eina_list_data_find(video->committed_list, mbuf))
      {
-        VIN("next fb destroyed");
-        e_devmgr_buffer_set_use(video->next_fb, EINA_FALSE);
-        video->next_fb = NULL;
+        VIN("committed fb destroyed");
+        video->committed_list = eina_list_remove(video->committed_list, mbuf);
+        e_devmgr_buffer_set_use(mbuf, EINA_FALSE);
         need_hide = EINA_TRUE;
       }
 
@@ -489,17 +493,12 @@ _e_video_pp_buffer_cb_free(E_Devmgr_Buf *mbuf, void *data)
 {
    E_Video *video = data;
 
-   if (video->current_fb == mbuf)
-     {
-        e_devmgr_buffer_set_use(video->current_fb, EINA_FALSE);
-        video->current_fb = NULL;
-      }
+   e_devmgr_buffer_set_use(mbuf, EINA_FALSE);
 
-   if (video->next_fb == mbuf)
-     {
-        e_devmgr_buffer_set_use(video->next_fb, EINA_FALSE);
-        video->next_fb = NULL;
-      }
+   if (video->current_fb == mbuf)
+     video->current_fb = NULL;
+
+   video->committed_list = eina_list_remove(video->committed_list, mbuf);
 
    video->waiting_list = eina_list_remove(video->waiting_list, mbuf);
 
@@ -1009,6 +1008,24 @@ _e_video_format_info_get(E_Video *video)
    video->tbmfmt = tbm_surface_get_format(tbm_surf);
 }
 
+static Eina_Bool
+_e_video_can_commit(E_Video *video)
+{
+   if (dconfig->conf->eom_enable == EINA_TRUE)
+     {
+        if (!video->external_video && e_devicemgr_dpms_get(video->drm_output))
+          return EINA_FALSE;
+     }
+   else
+     if (e_devicemgr_dpms_get(video->drm_output))
+       return EINA_FALSE;
+
+   if (!_e_video_is_visible(video))
+     return EINA_FALSE;
+
+   return EINA_TRUE;
+}
+
 static void
 _e_video_commit_handler(tdm_layer *layer, unsigned int sequence,
                         unsigned int tv_sec, unsigned int tv_usec,
@@ -1016,6 +1033,7 @@ _e_video_commit_handler(tdm_layer *layer, unsigned int sequence,
 {
    E_Video *video;
    Eina_List *l;
+   E_Devmgr_Buf *mbuf;
 
    EINA_LIST_FOREACH(video_list, l, video)
      {
@@ -1023,58 +1041,74 @@ _e_video_commit_handler(tdm_layer *layer, unsigned int sequence,
      }
 
    if (!video) return;
-   if (!video->next_fb) return;
+   if (!video->committed_list) return;
 
-   DBG("---------------------------------");
+   if (_e_video_can_commit(video))
+     {
+        tbm_surface_h displaying_buffer = tdm_layer_get_displaying_buffer(video->layer, NULL);
 
-   if (video->current_fb && MBUF_IS_VALID(video->current_fb))
+        EINA_LIST_FOREACH(video->committed_list, l, mbuf)
+          {
+             if (mbuf->tbm_surface == displaying_buffer) break;
+          }
+        if (!mbuf) return;
+     }
+   else
+     mbuf = eina_list_nth(video->committed_list, 0);
+
+   video->committed_list = eina_list_remove(video->committed_list, mbuf);
+
+   /* client can attachs the same wl_buffer twice. */
+   if (video->current_fb && MBUF_IS_VALID(video->current_fb) && mbuf != video->current_fb)
      {
         e_devmgr_buffer_set_use(video->current_fb, EINA_FALSE);
 
-        /* if client attachs the same wl_buffer twice, current_fb and next_fb can be same.
-         * so we have to keep the reference for it
-         */
         if (video->current_fb->comp_buffer)
-          {
-             if (video->next_fb != video->current_fb)
-                  e_comp_wl_buffer_reference(&video->current_fb->buffer_ref, NULL);
-          }
+          e_comp_wl_buffer_reference(&video->current_fb->buffer_ref, NULL);
      }
 
-   video->current_fb = video->next_fb;
+   video->current_fb = mbuf;
 
    VDB("current_fb(%d)", MSTAMP(video->current_fb));
+}
 
-   video->next_fb = eina_list_nth(video->waiting_list, 0);
-   if (!video->next_fb)
-     goto done;
+static void
+_e_video_vblank_handler(tdm_output *output, unsigned int sequence,
+                        unsigned int tv_sec, unsigned int tv_usec,
+                        void *user_data)
+{
+   E_Video *video;
+   Eina_List *l;
+   E_Devmgr_Buf *mbuf;
 
-   video->waiting_list = eina_list_remove(video->waiting_list, video->next_fb);
+   EINA_LIST_FOREACH(video_list, l, video)
+     {
+        if (video == user_data) break;
+     }
 
-   if (!_e_video_is_visible(video))
+   if (!video) return;
+
+   video->waiting_vblank = EINA_FALSE;
+
+   if (!video->waiting_list) return;
+
+   mbuf = eina_list_nth(video->waiting_list, 0);
+
+   video->waiting_list = eina_list_remove(video->waiting_list, mbuf);
+   video->committed_list = eina_list_append(video->committed_list, mbuf);
+
+   if (!_e_video_can_commit(video))
      goto no_commit;
 
-   if (dconfig->conf->eom_enable == EINA_TRUE)
-     {
-        if (!video->external_video && e_devicemgr_dpms_get(video->drm_output))
-          goto no_commit;
-     }
-   else
-     if (e_devicemgr_dpms_get(video->drm_output))
-       goto no_commit;
-
-      if (e_devicemgr_dpms_get(video->drm_output))
-        goto no_commit;
-
-   if (!_e_video_frame_buffer_show(video, video->next_fb))
+   if (!_e_video_frame_buffer_show(video, mbuf))
      goto no_commit;
 
    goto done;
 
 no_commit:
    _e_video_commit_handler(NULL, 0, 0, 0, video);
+   _e_video_vblank_handler(NULL, 0, 0, 0, video);
 done:
-   DBG("---------------------------------...");
    return;
 }
 
@@ -1142,6 +1176,10 @@ _e_video_frame_buffer_show(E_Video *video, E_Devmgr_Buf *mbuf)
    ret = tdm_layer_commit(video->layer, _e_video_commit_handler, video);
    EINA_SAFETY_ON_FALSE_RETURN_VAL(ret == TDM_ERROR_NONE, EINA_FALSE);
 
+   ret = tdm_output_wait_vblank(video->output, 1, 0, _e_video_vblank_handler, video);
+   EINA_SAFETY_ON_FALSE_RETURN_VAL(ret == TDM_ERROR_NONE, EINA_FALSE);
+
+   video->waiting_vblank = EINA_TRUE;
 
    topmost = find_topmost_parent_get(video->ec);
    if (topmost && (topmost->argb || topmost->comp_data->sub.below_obj) &&
@@ -1198,32 +1236,26 @@ _e_video_buffer_show(E_Video *video, E_Devmgr_Buf *mbuf, unsigned int transform)
    if (mbuf->comp_buffer)
      e_comp_wl_buffer_reference(&mbuf->buffer_ref, mbuf->comp_buffer);
 
-   if (!video->next_fb)
-     video->next_fb = mbuf;
+   if (!video->waiting_vblank)
+      video->committed_list = eina_list_append(video->committed_list, mbuf);
    else
      {
         video->waiting_list = eina_list_append(video->waiting_list, mbuf);
         VDB("There are waiting fbs more than 1");
         return;
      }
-   if (dconfig->conf->eom_enable == EINA_TRUE)
-     {
-        if (!video->external_video && e_devicemgr_dpms_get(video->drm_output))
-          goto no_commit;
-     }
-   else
-     if (e_devicemgr_dpms_get(video->drm_output))
-       goto no_commit;
 
-   if (!_e_video_frame_buffer_show(video, video->next_fb))
+   if (!_e_video_can_commit(video))
+     goto no_commit;
+
+   if (!_e_video_frame_buffer_show(video, mbuf))
      goto no_commit;
 
    return;
 
 no_commit:
-   video->next_fb = NULL;
-   e_devmgr_buffer_set_use(mbuf, EINA_FALSE);
    _e_video_commit_handler(NULL, 0, 0, 0, video);
+   _e_video_vblank_handler(NULL, 0, 0, 0, video);
    return;
 }
 
@@ -1275,12 +1307,7 @@ _e_video_cb_evas_show(void *data, Evas *e EINA_UNUSED, Evas_Object *obj EINA_UNU
 
    VIN("evas show (ec:%p)", video->ec);
    if (video->current_fb)
-     {
-        video->next_fb = video->current_fb;
-        video->current_fb = NULL;
-        if (!_e_video_frame_buffer_show(video, video->next_fb))
-          _e_video_commit_handler(NULL, 0, 0, 0, video);
-     }
+     _e_video_frame_buffer_show(video, video->current_fb);
 }
 
 static void
@@ -1496,7 +1523,9 @@ _e_video_set(E_Video *video, E_Client *ec)
 static void
 _e_video_hide(E_Video *video)
 {
-   if (video->current_fb || video->next_fb || video->waiting_list)
+   E_Devmgr_Buf *mbuf;
+
+   if (video->current_fb || video->committed_list)
      _e_video_frame_buffer_show(video, NULL);
 
    if (video->current_fb)
@@ -1505,15 +1534,11 @@ _e_video_hide(E_Video *video)
         video->current_fb = NULL;
       }
 
-   if (video->next_fb)
-     {
-        e_devmgr_buffer_set_use(video->next_fb, EINA_FALSE);
-        video->next_fb = NULL;
-      }
+   EINA_LIST_FREE(video->committed_list, mbuf)
+     e_devmgr_buffer_set_use(mbuf, EINA_FALSE);
 
-   video->waiting_list = eina_list_free(video->waiting_list);
-   if (video->waiting_list)
-     NEVER_GET_HERE();
+   EINA_LIST_FREE(video->waiting_list, mbuf)
+     e_devmgr_buffer_set_use(mbuf, EINA_FALSE);
 }
 
 static void
