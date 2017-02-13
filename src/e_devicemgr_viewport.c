@@ -70,6 +70,7 @@ typedef struct _E_Viewport {
    Eina_Bool follow_parent_transform;
 
    E_Client_Hook *client_hook_del;
+   E_Comp_Wl_Hook *subsurf_hook_create;
 } E_Viewport;
 
 static E_Viewport* _e_devicemgr_viewport_get_viewport(struct wl_resource *resource);
@@ -79,6 +80,7 @@ static void _e_devicemgr_viewport_cb_topmost_show(void *data, Evas *e, Evas_Obje
 static void _e_devicemgr_viewport_cb_topmost_resize(void *data, Evas *e, Evas_Object *obj, void *event_info);
 static void _e_devicemgr_viewport_cb_topmost_move(void *data, Evas *e, Evas_Object *obj, void *event_info);
 static void _e_devicemgr_viewport_cb_parent_resize(void *data, Evas *e, Evas_Object *obj, void *event_info);
+static void _e_devicemgr_viewport_parent_check(E_Viewport *viewport);
 static void _e_devicemgr_viewport_topmost_check(E_Viewport *viewport);
 
 static E_Client*
@@ -118,6 +120,9 @@ _destroy_viewport(E_Viewport *viewport)
 
    if (viewport->client_hook_del)
       e_client_hook_del(viewport->client_hook_del);
+
+   if (viewport->subsurf_hook_create)
+      e_comp_wl_hook_del(viewport->subsurf_hook_create);
 
    evas_object_event_callback_del_full(viewport->ec->frame, EVAS_CALLBACK_RESIZE,
                                        _e_devicemgr_viewport_cb_resize, viewport);
@@ -159,15 +164,41 @@ _destroy_viewport(E_Viewport *viewport)
 }
 
 static void
+_subsurface_cb_create(void *data, E_Client *ec)
+{
+   E_Viewport *viewport = data;
+
+   if (EINA_UNLIKELY(!ec)) return;
+   if (viewport->ec != ec) return;
+
+   _e_devicemgr_viewport_parent_check(viewport);
+   _e_devicemgr_viewport_topmost_check(viewport);
+}
+
+static void
 _client_cb_del(void *data, E_Client *ec)
 {
    E_Viewport *viewport = data;
 
    if (viewport->topmost == ec)
-     _e_devicemgr_viewport_topmost_check(viewport);
+     {
+        evas_object_event_callback_del(viewport->topmost->frame, EVAS_CALLBACK_SHOW,
+                                       _e_devicemgr_viewport_cb_topmost_show);
+        evas_object_event_callback_del(viewport->topmost->frame, EVAS_CALLBACK_RESIZE,
+                                       _e_devicemgr_viewport_cb_topmost_resize);
+        evas_object_event_callback_del(viewport->topmost->frame, EVAS_CALLBACK_MOVE,
+                                       _e_devicemgr_viewport_cb_topmost_move);
+        viewport->topmost = NULL;
+        PIN("topmost(%p)", viewport->topmost);
+     }
 
    if (viewport->epc == ec)
-     viewport->epc = NULL;
+     {
+        evas_object_event_callback_del(viewport->epc->frame, EVAS_CALLBACK_RESIZE,
+                                       _e_devicemgr_viewport_cb_parent_resize);
+        viewport->epc = NULL;
+        PIN("epc(%p)", viewport->epc);
+     }
 }
 
 static void
@@ -1749,6 +1780,7 @@ e_devicemgr_viewport_create(struct wl_resource *resource,
    _e_devicemgr_viewport_topmost_check(viewport);
 
    viewport->client_hook_del = e_client_hook_add(E_CLIENT_HOOK_DEL, _client_cb_del, viewport);
+   viewport->subsurf_hook_create = e_comp_wl_hook_add(E_COMP_WL_HOOK_SUBSURFACE_CREATE, _subsurface_cb_create, viewport);
 
    viewport->topmost_rotate_hdl =
      ecore_event_handler_add(E_EVENT_CLIENT_ROTATION_CHANGE_END,
