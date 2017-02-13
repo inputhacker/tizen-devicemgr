@@ -870,7 +870,7 @@ _e_input_devmgr_inputgen_client_add(struct wl_client *client, unsigned int clas)
    wl_client_add_destroy_listener(client, destroy_listener);
 
    data = E_NEW(e_devicemgr_inputgen_client_global_data, 1);
-   EINA_SAFETY_ON_NULL_GOTO(destroy_listener, failed);
+   EINA_SAFETY_ON_NULL_GOTO(data, failed);
 
    data->client = client;
    data->clas = clas;
