@@ -1,9 +1,13 @@
 #include "e_devicemgr_viewport.h"
 
-#define PER(fmt,arg...)   ERR("window(0x%08"PRIxPTR") ec(%p) epc(%p): "fmt, viewport->window, viewport->ec, viewport->epc, ##arg)
-#define PWR(fmt,arg...)   WRN("window(0x%08"PRIxPTR") ec(%p) epc(%p):"fmt, viewport->window, viewport->ec, viewport->epc, ##arg)
-#define PIN(fmt,arg...)   INF("window(0x%08"PRIxPTR") ec(%p) epc(%p):"fmt, viewport->window, viewport->ec, viewport->epc, ##arg)
-#define PDB(fmt,arg...)   DBG("window(0x%08"PRIxPTR") ec(%p) epc(%p):"fmt, viewport->window, viewport->ec, viewport->epc, ##arg)
+#define PER(fmt,arg...)   ERR("window(0x%08"PRIxPTR") ec(%p) epc(%p) topmost(%p): "fmt, \
+   viewport->window, viewport->ec, viewport->epc, viewport->topmost, ##arg)
+#define PWR(fmt,arg...)   WRN("window(0x%08"PRIxPTR") ec(%p) epc(%p) topmost(%p): "fmt, \
+   viewport->window, viewport->ec, viewport->epc, viewport->topmost, ##arg)
+#define PIN(fmt,arg...)   INF("window(0x%08"PRIxPTR") ec(%p) epc(%p) topmost(%p): "fmt, \
+   viewport->window, viewport->ec, viewport->epc, viewport->topmost, ##arg)
+#define PDB(fmt,arg...)   DBG("window(0x%08"PRIxPTR") ec(%p) epc(%p) topmost(%p): "fmt, \
+   viewport->window, viewport->ec, viewport->epc, viewport->topmost, ##arg)
 
 #undef SWAP
 #define SWAP(a, b)  ({double t; t = a; a = b; b = t;})
@@ -115,8 +119,11 @@ _destroy_viewport(E_Viewport *viewport)
    ecore_event_handler_del(viewport->topmost_rotate_hdl);
 
    if (viewport->epc && viewport->query_parent_size)
-     evas_object_event_callback_del_full(viewport->epc->frame, EVAS_CALLBACK_RESIZE,
-                                         _e_devicemgr_viewport_cb_parent_resize, viewport);
+     {
+        evas_object_event_callback_del_full(viewport->epc->frame, EVAS_CALLBACK_RESIZE,
+                                            _e_devicemgr_viewport_cb_parent_resize, viewport);
+        viewport->epc = NULL;
+     }
 
    if (viewport->client_hook_del)
       e_client_hook_del(viewport->client_hook_del);
@@ -137,6 +144,7 @@ _destroy_viewport(E_Viewport *viewport)
                                             _e_devicemgr_viewport_cb_topmost_resize, viewport);
         evas_object_event_callback_del_full(viewport->topmost->frame, EVAS_CALLBACK_MOVE,
                                             _e_devicemgr_viewport_cb_topmost_move, viewport);
+        viewport->topmost = NULL;
      }
 
    wl_list_remove(&viewport->surface_destroy_listener.link);
@@ -158,7 +166,7 @@ _destroy_viewport(E_Viewport *viewport)
         ec->comp_data->pending.buffer_viewport.changed = 1;
      }
 
-   PIN("tizen_viewport@%d destroy", wl_resource_get_id(viewport->resource));
+   PIN("tizen_viewport@%d destroy. viewport(%p)", wl_resource_get_id(viewport->resource), viewport);
 
    free(viewport);
 }
@@ -180,6 +188,26 @@ _client_cb_del(void *data, E_Client *ec)
 {
    E_Viewport *viewport = data;
 
+   if (viewport->epc == ec)
+     {
+        evas_object_event_callback_del(viewport->epc->frame, EVAS_CALLBACK_RESIZE,
+                                       _e_devicemgr_viewport_cb_parent_resize);
+        PIN("epc del");
+        viewport->epc = NULL;
+
+        if (viewport->topmost)
+          {
+             evas_object_event_callback_del(viewport->topmost->frame, EVAS_CALLBACK_SHOW,
+                                            _e_devicemgr_viewport_cb_topmost_show);
+             evas_object_event_callback_del(viewport->topmost->frame, EVAS_CALLBACK_RESIZE,
+                                            _e_devicemgr_viewport_cb_topmost_resize);
+             evas_object_event_callback_del(viewport->topmost->frame, EVAS_CALLBACK_MOVE,
+                                            _e_devicemgr_viewport_cb_topmost_move);
+             PIN("remove topmost by deleting epc");
+             viewport->topmost = NULL;
+          }
+     }
+
    if (viewport->topmost == ec)
      {
         evas_object_event_callback_del(viewport->topmost->frame, EVAS_CALLBACK_SHOW,
@@ -188,16 +216,8 @@ _client_cb_del(void *data, E_Client *ec)
                                        _e_devicemgr_viewport_cb_topmost_resize);
         evas_object_event_callback_del(viewport->topmost->frame, EVAS_CALLBACK_MOVE,
                                        _e_devicemgr_viewport_cb_topmost_move);
+        PIN("topmost del");
         viewport->topmost = NULL;
-        PIN("topmost(%p)", viewport->topmost);
-     }
-
-   if (viewport->epc == ec)
-     {
-        evas_object_event_callback_del(viewport->epc->frame, EVAS_CALLBACK_RESIZE,
-                                       _e_devicemgr_viewport_cb_parent_resize);
-        viewport->epc = NULL;
-        PIN("epc(%p)", viewport->epc);
      }
 }
 
@@ -650,12 +670,6 @@ _e_devicemgr_viewport_cb_set_destination(struct wl_client *client EINA_UNUSED,
 
    _e_devicemgr_viewport_parent_check(viewport);
    _e_devicemgr_viewport_topmost_check(viewport);
-
-   /* ignore x, y pos in case of a toplevel-role surface(shell surface). The
-    * position is decided by shell surface interface.
-    */
-   if (viewport->topmost == viewport->ec)
-     x = y = 0;
 
    viewport->type = DESTINATION_TYPE_RECT;
 
@@ -1805,7 +1819,7 @@ e_devicemgr_viewport_create(struct wl_resource *resource,
    viewport->surface_destroy_listener.notify = _e_devicemgr_viewport_cb_surface_destroy;
    wl_resource_add_destroy_listener(ec->comp_data->surface, &viewport->surface_destroy_listener);
 
-   PIN("tizen_viewport@%d ec(%p) epc(%p) created", id, viewport->ec, viewport->epc);
+   PIN("tizen_viewport@%d viewport(%p) created", id, viewport);
 
    return EINA_TRUE;
 }
