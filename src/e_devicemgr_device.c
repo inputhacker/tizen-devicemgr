@@ -1599,6 +1599,7 @@ _e_input_devmgr_cb_pointer_warp(struct wl_client *client, struct wl_resource *re
 {
    E_Client *ec = NULL;
    int ret;
+   int new_x, new_y;
 
    if (!(ec = wl_resource_get_user_data(surface)) || !ec->visible)
      {
@@ -1621,7 +1622,12 @@ _e_input_devmgr_cb_pointer_warp(struct wl_client *client, struct wl_resource *re
         return;
      }
 
-   ret = _e_devicemgr_pointer_warp(ec->client.x + wl_fixed_to_int(x), ec->client.y + wl_fixed_to_int(y));
+   new_x = wl_fixed_to_int(x);
+   new_y = wl_fixed_to_int(y);
+   if (e_client_transform_core_enable_get(ec))
+     e_client_transform_core_input_inv_transform(ec, wl_fixed_to_int(x), wl_fixed_to_int(y), &new_x, &new_y);
+
+   ret = _e_devicemgr_pointer_warp(ec->client.x + new_x, ec->client.y + new_y);
    tizen_input_device_manager_send_error(resource, ret);
 }
 
