@@ -76,6 +76,7 @@ struct _E_Video
 
    /* attributes */
    Eina_List *tdm_prop_list;
+   Eina_List *late_tdm_prop_list;
    int tdm_mute_id;
 
    Eina_Bool  cb_registered;
@@ -1181,6 +1182,18 @@ _e_video_frame_buffer_show(E_Video *video, E_Devmgr_Buf *mbuf)
 
    video->waiting_vblank = EINA_TRUE;
 
+   if (video->layer)
+     {
+        // need late call tdm property in list
+        Tdm_Prop_Value *prop;
+        Eina_List *l = NULL;
+        EINA_LIST_FOREACH(video->late_tdm_prop_list, l, prop)
+          {
+             VIN("call property(%s), value(%d)", prop->name, (unsigned int)prop->value.u32);
+             tdm_layer_set_property(video->layer, prop->id, prop->value);
+          }
+     }
+
    topmost = find_topmost_parent_get(video->ec);
    if (topmost && (topmost->argb || topmost->comp_data->sub.below_obj) &&
        !e_comp_object_mask_has(video->ec->frame))
@@ -1592,12 +1605,22 @@ _e_video_destroy(E_Video *video)
              free(tdm_prop);
           }
      }
+   if(video->late_tdm_prop_list)
+     {
+        Tdm_Prop_Value *tdm_prop;
+        EINA_LIST_FREE(video->late_tdm_prop_list, tdm_prop)
+          {
+             free(tdm_prop);
+          }
+     }
 
    if (video->input_buffer_list)
      NEVER_GET_HERE();
    if (video->pp_buffer_list)
      NEVER_GET_HERE();
    if (video->tdm_prop_list)
+     NEVER_GET_HERE();
+   if (video->late_tdm_prop_list)
      NEVER_GET_HERE();
 
    /* destroy converter second */
@@ -2144,20 +2167,36 @@ _e_devicemgr_video_object_cb_set_attribute(struct wl_client *client,
                   return;
                }
           }
+        EINA_LIST_FOREACH(video->late_tdm_prop_list, l, prop)
+          {
+             if (!strncmp(name, prop->name, TDM_NAME_LEN))
+               {
+                  VDB("find prop data(%s) update value(%d -> %d)", prop->name, (unsigned int)prop->value.u32, (unsigned int)value);
+                  prop->value.u32 = value;
+                  return;
+               }
+          }
 
         prop = calloc(1, sizeof(Tdm_Prop_Value));
         if(!prop) return;
         prop->value.u32 = value;
         prop->id = props[i].id;
         memcpy(prop->name, props[i].name, sizeof(props[i].name));
-        VDB("Add property(%s) value(%d)", prop->name, value);
-        video->tdm_prop_list = eina_list_append(video->tdm_prop_list, prop);
+        VIN("Add property(%s) value(%d)", prop->name, value);
+        if (!strncmp(prop->name, "mute", TDM_NAME_LEN))
+          {
+             video->late_tdm_prop_list = eina_list_append(video->late_tdm_prop_list, prop);
+          }
+        else
+          {
+             video->tdm_prop_list = eina_list_append(video->tdm_prop_list, prop);
+          }
      }
    // if set layer call property
    else
      {
         tdm_value v = {.u32 = value};
-        VIN("set layer: call property");
+        VIN("set layer: call property(%s), value(%d)", name, value);
         tdm_layer_set_property(video->layer, props[i].id, v);
      }
 }
