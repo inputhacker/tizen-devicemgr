@@ -42,6 +42,8 @@ typedef struct _e_devicemgr_input_devmgr_data e_devicemgr_input_devmgr_data;
 typedef struct _e_devicemgr_input_device_user_data e_devicemgr_input_device_user_data;
 typedef struct _e_devicemgr_inputgen_client_data e_devicemgr_inputgen_client_data;
 typedef struct _e_devicemgr_inputgen_client_global_data e_devicemgr_inputgen_client_global_data;
+typedef struct _e_devicemgr_inputgen_device_data e_devicemgr_inputgen_device_data;
+typedef struct _e_devicemgr_inputgen_resource_data e_devicemgr_inputgen_resource_data;
 
 struct _e_devicemgr_input_device_user_data
 {
@@ -62,6 +64,20 @@ struct _e_devicemgr_inputgen_client_global_data
    unsigned int clas;
 };
 
+struct _e_devicemgr_inputgen_device_data
+{
+   int uinp_fd;
+   char *identifier;
+   char name[UINPUT_MAX_NAME_SIZE];
+   Eina_List *clients;
+};
+
+struct _e_devicemgr_inputgen_resource_data
+{
+   struct wl_resource *resource;
+   char name[UINPUT_MAX_NAME_SIZE];
+};
+
 struct _e_devicemgr_input_devmgr_data
 {
    unsigned int block_devtype;
@@ -78,25 +94,11 @@ struct _e_devicemgr_input_devmgr_data
 
    struct
    {
-      struct uinput_user_dev uinp;
-      struct
-      {
-         int uinp_fd;
-         char *uinp_identifier;
-         Eina_List *clients;
-      } kbd;
-      struct
-      {
-         int uinp_fd;
-         char *uinp_identifier;
-         Eina_List *clients;
-      } ptr;
-      struct
-      {
-         int uinp_fd;
-         char *uinp_identifier;
-         Eina_List *clients;
-      } touch;
+      Eina_List *kbd_list;
+      Eina_List *ptr_list;
+      Eina_List *touch_list;
+
+      Eina_List *resource_list;
    }inputgen;
 
    struct
