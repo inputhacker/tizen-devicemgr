@@ -1119,6 +1119,7 @@ _e_video_frame_buffer_show(E_Video *video, E_Devmgr_Buf *mbuf)
    tdm_info_layer info, old_info;
    tdm_error ret;
    E_Client *topmost;
+   Eina_Bool first_commit = EINA_FALSE;
 
    if (!mbuf)
      {
@@ -1146,6 +1147,7 @@ _e_video_frame_buffer_show(E_Video *video, E_Devmgr_Buf *mbuf)
              VIN("call property(%s), value(%d)", prop->name, (unsigned int)prop->value.u32);
              tdm_layer_set_property(video->layer, prop->id, prop->value);
           }
+        first_commit = EINA_TRUE;
      }
 
    CLEAR(old_info);
@@ -1182,7 +1184,7 @@ _e_video_frame_buffer_show(E_Video *video, E_Devmgr_Buf *mbuf)
 
    video->waiting_vblank = EINA_TRUE;
 
-   if (video->layer)
+   if (first_commit && video->layer)
      {
         // need late call tdm property in list
         Tdm_Prop_Value *prop;
