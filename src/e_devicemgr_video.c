@@ -2004,7 +2004,7 @@ _e_video_cb_ec_client_show(void *data, int type, void *event)
    video = find_video_with_surface(video_ec->comp_data->surface);
    if (!video) return ECORE_CALLBACK_PASS_ON;
 
-   VIN("client show: find video child(0x%08"PRIxPTR")", (Ecore_Window)e_client_util_win_get(video_ec));
+   VIN("client(0x%08"PRIxPTR") show: find video child(0x%08"PRIxPTR")", (Ecore_Window)e_client_util_win_get(ec), (Ecore_Window)e_client_util_win_get(video_ec));
    if(video->old_comp_buffer)
      {
         VIN("video already rendering..");
@@ -2014,6 +2014,7 @@ _e_video_cb_ec_client_show(void *data, int type, void *event)
    if(ec == find_topmost_parent_get(video->ec))
      {
        VIN("video need rendering..");
+       e_devicemgr_viewport_apply(ec);
        _e_video_render(video, __FUNCTION__);
      }
 
