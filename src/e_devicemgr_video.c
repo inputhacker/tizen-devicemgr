@@ -940,7 +940,9 @@ _e_video_geometry_cal(E_Video * video)
      ecore_drm_output_current_resolution_get(video->drm_output, &screen.w, &screen.h, NULL);
 
    _e_video_buffer_size_get(video->ec->pixmap, &input_r.w, &input_r.h);
-   if (!eina_rectangle_intersection(&video->geo.input_r, &input_r))
+   // when topmost is not mapped, input size is set 1by1 abnormally.
+   // in this case, it will be render by topmost showing.
+   if (!eina_rectangle_intersection(&video->geo.input_r, &input_r) || (video->geo.input_r.w <= 1 && video->geo.input_r.h <= 1))
      {
         VER("input area is empty");
         return EINA_FALSE;
