@@ -1268,9 +1268,9 @@ _e_input_devmgr_generate_key_event(const char *key, Eina_Bool pressed)
    e->compose = eina_stringshare_add(key);
    e->string = e->compose;
 
-   e->window = 0;
-   e->event_window = 0;
-   e->root_window = 0;
+   e->window = e_comp->ee_win;
+   e->event_window = e_comp->ee_win;
+   e->root_window = e_comp->ee_win;
    e->timestamp = (int)(ecore_time_get() * 1000);
    e->same_screen = 1;
    e->keycode = keycode;
