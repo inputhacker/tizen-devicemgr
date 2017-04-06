@@ -523,6 +523,7 @@ _e_devicemgr_send_detent_event(int detent)
    if (!ec) return;
    if (e_object_is_del(E_OBJECT(ec))) return;
    if (ec->ignored) return;
+   if (!ec->comp_data || !ec->comp_data->surface) return;
 
    f_value = wl_fixed_from_double(detent*1.0);
    wc = wl_resource_get_client(ec->comp_data->surface);
