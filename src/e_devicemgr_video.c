@@ -275,6 +275,7 @@ _e_video_set_layer(E_Video *video, Eina_Bool set)
         VIN("release layer: %p", video->layer);
         e_devicemgr_tdm_set_layer_usable(video->layer, EINA_TRUE);
         video->layer = NULL;
+        video->old_comp_buffer = NULL;
      }
    else
      {
