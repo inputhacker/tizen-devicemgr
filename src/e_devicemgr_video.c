@@ -883,29 +883,6 @@ _e_video_geometry_cal_to_input_rect(E_Video * video, Eina_Rectangle *srect, Eina
    drect->h = MAX(yf1, yf2) - drect->y;
 }
 
-static void
-_e_video_buffer_size_get(E_Pixmap *pixmap, int *bw, int *bh)
-{
-   E_Comp_Wl_Buffer *buffer = e_pixmap_resource_get(pixmap);
-
-   *bw = *bh = 0;
-
-   if (!buffer) return;
-
-   if (buffer->type == E_COMP_WL_BUFFER_TYPE_VIDEO)
-     {
-        tbm_surface_h tbm_surface = wayland_tbm_server_get_surface(NULL, buffer->resource);
-
-        *bw = tbm_surface_get_width(tbm_surface);
-        *bh = tbm_surface_get_height(tbm_surface);
-     }
-   else
-     {
-        *bw = buffer->w;
-        *bh = buffer->h;
-     }
-}
-
 static Eina_Bool
 _e_video_geometry_cal(E_Video * video)
 {
@@ -940,7 +917,7 @@ _e_video_geometry_cal(E_Video * video)
    else
      ecore_drm_output_current_resolution_get(video->drm_output, &screen.w, &screen.h, NULL);
 
-   _e_video_buffer_size_get(video->ec->pixmap, &input_r.w, &input_r.h);
+   e_devmgr_buffer_size_get(video->ec, &input_r.w, &input_r.h);
    // when topmost is not mapped, input size can be abnormal.
    // in this case, it will be render by topmost showing.
    if (!eina_rectangle_intersection(&video->geo.input_r, &input_r) || (video->geo.input_r.w <= 10 || video->geo.input_r.h <= 10))
