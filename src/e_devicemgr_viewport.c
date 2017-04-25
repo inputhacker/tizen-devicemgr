@@ -952,6 +952,40 @@ _destination_mode_calculate_origin_or_letter(int pw, int ph, int sw, int sh,
       _destination_mode_calculate_letter_box(pw, ph, sw, sh, rh, rv, rect);
 }
 
+/* we have to consider the output transform. if epc is toplevel, and if
+ * output transform is 3, and if vpp->buffer.transform is 3, then actual
+ * epc's transform is 0.
+ */
+static int
+_get_parent_transform(E_Viewport *viewport)
+{
+   E_Client *epc = viewport->epc;
+   E_Comp_Wl_Buffer_Viewport *vpp;
+   E_Client *topmost;
+   unsigned int ptran, pflip;
+   int ptransform;
+
+   if (!epc->comp_data || e_object_is_del(E_OBJECT(epc)))
+     return 0;
+
+   vpp = &epc->comp_data->scaler.buffer_viewport;
+   ptransform = vpp->buffer.transform;
+
+   topmost = _topmost_parent_get(epc);
+   if (epc == topmost)
+     {
+        E_Comp_Wl_Output *output = e_comp_wl_output_find(topmost);
+
+        EINA_SAFETY_ON_NULL_RETURN_VAL(output, 0);
+
+        ptran = ptransform & 0x3;
+        pflip = ptransform & 0x4;
+        ptransform = pflip + (4 + ptran - output->transform) % 4;
+     }
+
+   return ptransform;
+}
+
 static Eina_Bool
 _destination_mode_calculate_destination(E_Viewport *viewport, Eina_Rectangle *prect, Eina_Rectangle *rect)
 {
@@ -1153,16 +1187,14 @@ _e_devicemgr_viewport_calculate_destination(E_Viewport *viewport, Eina_Rectangle
 
    if (viewport->epc)
      {
-        E_Client *epc = viewport->epc;
-        E_Comp_Wl_Buffer_Viewport *vpp;
+        int ptransform = _get_parent_transform(viewport);
 
-        vpp = &epc->comp_data->scaler.buffer_viewport;
-        if (vpp->buffer.transform > 0)
+        if (ptransform > 0)
           {
-             if (vpp->buffer.transform % 2)
-               _source_transform_to_surface(prect->h, prect->w, vpp->buffer.transform, 1, rect, rect);
+             if (ptransform % 2)
+               _source_transform_to_surface(prect->h, prect->w, ptransform, 1, rect, rect);
              else
-               _source_transform_to_surface(prect->w, prect->h, vpp->buffer.transform, 1, rect, rect);
+               _source_transform_to_surface(prect->w, prect->h, ptransform, 1, rect, rect);
           }
      }
 
@@ -1266,8 +1298,8 @@ _e_devicemgr_viewport_apply_transform(E_Viewport *viewport, int *rtransform)
    if (viewport->follow_parent_transform && viewport->epc)
      {
         E_Client *epc = viewport->epc;
-        E_Comp_Wl_Buffer_Viewport *vpp;
         unsigned int pwtran, ptran, pflip, ctran, cflip;
+        int ptransform;
 
         if (!epc->comp_data || e_object_is_del(E_OBJECT(epc)))
           {
@@ -1275,15 +1307,13 @@ _e_devicemgr_viewport_apply_transform(E_Viewport *viewport, int *rtransform)
              return EINA_FALSE;
           }
 
-        vpp = &epc->comp_data->scaler.buffer_viewport;
-
-        PDB("parent's transform(%d) rot.ang.curr(%d)",
-            vpp->buffer.transform, epc->e.state.rot.ang.curr/90);
+        ptransform = _get_parent_transform(viewport);
+        PDB("parent's transform(%d) rot.ang.curr(%d)", ptransform, epc->e.state.rot.ang.curr/90);
 
         pwtran = ((epc->e.state.rot.ang.curr + 360) % 360) / 90;
 
-        ptran = ((pwtran & 0x3) + (vpp->buffer.transform & 0x3)) & 0x3;
-        pflip = (vpp->buffer.transform & 0x4);
+        ptran = ((pwtran & 0x3) + (ptransform & 0x3)) & 0x3;
+        pflip = (ptransform & 0x4);
 
         ctran = (viewport->transform & 0x3);
         cflip = (viewport->transform & 0x4);
@@ -1486,6 +1516,9 @@ e_devicemgr_viewport_apply(E_Client *ec)
         Eina_Rectangle rrect = {0,};
         int rtransform = 0;
 
+        /* evas map follow screen coordinates. so all information including the
+         * transform and destination also should follow screen coordinates.
+         */
         changed |= _e_devicemgr_viewport_apply_transform(viewport, &rtransform);
         changed |= _e_devicemgr_viewport_apply_destination(viewport, &rrect);
         src_changed |= _e_devicemgr_viewport_apply_source(viewport);
