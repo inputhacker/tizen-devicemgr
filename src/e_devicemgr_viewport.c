@@ -1,4 +1,5 @@
 #include "e_devicemgr_viewport.h"
+#include "e_devicemgr_buffer.h"
 
 #define PER(fmt,arg...)   ERR("window(0x%08"PRIxPTR") ec(%p) epc(%p): "fmt, \
    viewport->window, viewport->ec, viewport->epc, ##arg)
@@ -813,35 +814,6 @@ static const struct tizen_viewport_interface _e_devicemgr_viewport_interface =
 };
 
 static void
-_buffer_size_get(E_Client *ec, int *bw, int *bh)
-{
-   E_Comp_Wl_Buffer *buffer = ec->comp_data->buffer_ref.buffer;
-
-   *bw = *bh = 0;
-
-   if (!buffer)
-     {
-        INF("no buffer. using ec(%p) size(%dx%d)", ec, ec->w, ec->h);
-        *bw = ec->w;
-        *bh = ec->h;
-        return;
-     }
-
-   if (buffer->type == E_COMP_WL_BUFFER_TYPE_VIDEO)
-     {
-        tbm_surface_h tbm_surface = wayland_tbm_server_get_surface(NULL, buffer->resource);
-
-        *bw = tbm_surface_get_width(tbm_surface);
-        *bh = tbm_surface_get_height(tbm_surface);
-     }
-   else
-     {
-        *bw = buffer->w;
-        *bh = buffer->h;
-     }
-}
-
-static void
 _source_transform_coord(int width, int height, int trans, int scale, float ox, float oy, float *tx, float *ty)
 {
    switch (trans)
@@ -996,7 +968,7 @@ _destination_mode_calculate_destination(E_Viewport *viewport, Eina_Rectangle *pr
         sh = viewport->source.h;
      }
    else
-     _buffer_size_get(ec, &sw, &sh);
+     e_devmgr_buffer_size_get(ec, &sw, &sh);
 
    if (vp->buffer.transform % 2)
       SWAP(sw, sh);
@@ -1222,7 +1194,7 @@ _e_devicemgr_viewport_crop_by_parent(E_Viewport *viewport, Eina_Rectangle *paren
      {
         if (viewport->source.w == -1)
           {
-             _buffer_size_get(viewport->ec, &bw, &bh);
+             e_devmgr_buffer_size_get(viewport->ec, &bw, &bh);
 
              viewport->cropped_source.x = viewport->cropped_source.y = 0;
              viewport->cropped_source.w = bw;
@@ -1252,7 +1224,7 @@ _e_devicemgr_viewport_crop_by_parent(E_Viewport *viewport, Eina_Rectangle *paren
 
    PDB("  => (%d,%d %dx%d)", EINA_RECTANGLE_ARGS(dst));
 
-   _buffer_size_get(viewport->ec, &bw, &bh);
+   e_devmgr_buffer_size_get(viewport->ec, &bw, &bh);
 
    if (viewport->source.w == -1)
      {
@@ -1374,7 +1346,7 @@ _e_devicemgr_viewport_apply_destination(E_Viewport *viewport, Eina_Rectangle *rr
              prect.h = vpp->surface.height;
           }
         else
-          _buffer_size_get(epc, &prect.w, &prect.h);
+          e_devmgr_buffer_transform_scale_size_get(epc, &prect.w, &prect.h);
      }
 
    if (!(prect.w > 0 && prect.h > 0))
@@ -1453,7 +1425,7 @@ _e_devicemgr_viewport_apply_source(E_Viewport *viewport)
    if (viewport->cropped_source.w == -1)
      return EINA_FALSE;
 
-   _buffer_size_get(ec, &bw, &bh);
+   e_devmgr_buffer_size_get(ec, &bw, &bh);
 
    rect.w = bw;
    rect.h = bh;
