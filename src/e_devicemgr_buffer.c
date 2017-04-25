@@ -1195,3 +1195,78 @@ e_devmgr_buffer_list_print(const char *log_path)
 
    fclose(log_fl);
 }
+
+void
+e_devmgr_buffer_size_get(E_Client *ec, int *bw, int *bh)
+{
+   E_Comp_Wl_Buffer *buffer = e_pixmap_resource_get(ec->pixmap);
+
+   *bw = *bh = 0;
+
+   if (!buffer)
+     {
+        INF("no buffer. using ec(%p) size(%dx%d)", ec, ec->w, ec->h);
+        *bw = ec->w;
+        *bh = ec->h;
+        return;
+     }
+
+   if (buffer->type == E_COMP_WL_BUFFER_TYPE_VIDEO)
+     {
+        tbm_surface_h tbm_surface = wayland_tbm_server_get_surface(NULL, buffer->resource);
+
+        *bw = tbm_surface_get_width(tbm_surface);
+        *bh = tbm_surface_get_height(tbm_surface);
+     }
+   else
+     {
+        *bw = buffer->w;
+        *bh = buffer->h;
+     }
+}
+
+void
+e_devmgr_buffer_transform_scale_size_get(E_Client *ec, int *bw, int *bh)
+{
+   E_Comp_Wl_Buffer *buffer = e_pixmap_resource_get(ec->pixmap);
+   E_Comp_Wl_Buffer_Viewport *vp = &ec->comp_data->scaler.buffer_viewport;
+   int w, h;
+
+   *bw = *bh = 0;
+
+   if (!buffer)
+     {
+        INF("no buffer. using ec(%p) size(%dx%d)", ec, ec->w, ec->h);
+        *bw = ec->w;
+        *bh = ec->h;
+        return;
+     }
+
+   if (buffer->type == E_COMP_WL_BUFFER_TYPE_VIDEO)
+     {
+        tbm_surface_h tbm_surface = wayland_tbm_server_get_surface(NULL, buffer->resource);
+
+        w = tbm_surface_get_width(tbm_surface);
+        h = tbm_surface_get_height(tbm_surface);
+     }
+   else
+     {
+        w = buffer->w;
+        h = buffer->h;
+     }
+
+   switch (vp->buffer.transform)
+     {
+      case WL_OUTPUT_TRANSFORM_90:
+      case WL_OUTPUT_TRANSFORM_270:
+      case WL_OUTPUT_TRANSFORM_FLIPPED_90:
+      case WL_OUTPUT_TRANSFORM_FLIPPED_270:
+        *bw = h / vp->buffer.scale;
+        *bh = w / vp->buffer.scale;
+        break;
+      default:
+        *bw = w / vp->buffer.scale;
+        *bh = h / vp->buffer.scale;
+        break;
+     }
+}

@@ -110,4 +110,7 @@ uint e_devmgr_buffer_get_mills(void);
 int  e_devmgr_buffer_list_length(void);
 void e_devmgr_buffer_list_print(const char *log_path);
 
+void e_devmgr_buffer_size_get(E_Client *ec, int *bw, int *bh);
+void e_devmgr_buffer_transform_scale_size_get(E_Client *ec, int *bw, int *bh);
+
 #endif
