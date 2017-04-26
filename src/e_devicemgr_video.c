@@ -9,6 +9,7 @@
 
 static int _video_detail_log_dom = -1;
 static Eina_Bool video_to_primary;
+static Eina_Bool video_punch;
 
 #define BUFFER_MAX_COUNT   5
 #define MIN_WIDTH   32
@@ -1282,6 +1283,12 @@ _e_video_frame_buffer_show(E_Video *video, E_Devmgr_Buf *mbuf)
          }
      }
 
+   if (video_punch)
+     {
+        e_comp_object_mask_set(video->ec->frame, EINA_TRUE);
+        VIN("punched");
+     }
+
    VDT("Client(%s):PID(%d) RscID(%d), Buffer(%p, refcnt:%d) is shown."
        "Geometry details are : buffer size(%dx%d) src(%d,%d, %dx%d)"
        " dst(%d,%d, %dx%d), transform(%d)",
@@ -2459,6 +2466,12 @@ _e_devicemgr_video_to_primary(void *data, const char *log_path)
    video_to_primary = !video_to_primary;
 }
 
+static void
+_e_devicemgr_video_punch(void *data, const char *log_path)
+{
+   video_punch = !video_punch;
+}
+
 int
 e_devicemgr_video_init(void)
 {
@@ -2468,6 +2481,7 @@ e_devicemgr_video_init(void)
    e_info_server_hook_set("mbuf", _e_devicemgr_mbuf_print, NULL);
    e_info_server_hook_set("video-dst-change", _e_devicemgr_video_dst_change, NULL);
    e_info_server_hook_set("video-to-primary", _e_devicemgr_video_to_primary, NULL);
+   e_info_server_hook_set("video-punch", _e_devicemgr_video_punch, NULL);
 
    _video_detail_log_dom = eina_log_domain_register("e-devicemgr-video", EINA_COLOR_BLUE);
    if (_video_detail_log_dom < 0)
@@ -2507,6 +2521,7 @@ e_devicemgr_video_fini(void)
    e_info_server_hook_set("mbuf", NULL, NULL);
    e_info_server_hook_set("video-dst-change", NULL, NULL);
    e_info_server_hook_set("video-to-primary", NULL, NULL);
+   e_info_server_hook_set("video-punch", NULL, NULL);
 
    eina_log_domain_unregister(_video_detail_log_dom);
    _video_detail_log_dom = -1;
