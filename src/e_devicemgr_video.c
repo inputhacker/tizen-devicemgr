@@ -82,6 +82,7 @@ struct _E_Video
    Eina_Bool  cb_registered;
    Eina_Bool  need_force_render;
    Eina_Bool  follow_topmost_visibility;
+   Eina_Bool  allowed_attribute;
 };
 
 typedef struct _Tdm_Prop_Value
@@ -2155,6 +2156,16 @@ _e_devicemgr_video_object_cb_set_attribute(struct wl_client *client,
          return;
       }
 
+   if (!video->layer && video->allowed_attribute)
+     {
+        VIN("set layer: set_attribute");
+        if (!_e_video_set_layer(video, EINA_TRUE))
+          {
+             VER("set layer failed");
+             return;
+          }
+     }
+
    // check set video layer
    if(!video->layer)
      {
@@ -2242,12 +2253,50 @@ _e_devicemgr_video_object_cb_unfollow_topmost_visibility(struct wl_client *clien
 
 }
 
+static void
+_e_devicemgr_video_object_cb_allowed_attribute(struct wl_client *client,
+                                           struct wl_resource *resource)
+{
+   E_Video *video;
+
+   video = wl_resource_get_user_data(resource);
+   EINA_SAFETY_ON_NULL_RETURN(video);
+
+   if(!video->ec || video->allowed_attribute)
+     return;
+
+   VIN("set allowed_attribute");
+
+   video->allowed_attribute= EINA_TRUE;
+
+}
+
+static void
+_e_devicemgr_video_object_cb_disallowed_attribute(struct wl_client *client,
+                                           struct wl_resource *resource)
+{
+   E_Video *video;
+
+   video = wl_resource_get_user_data(resource);
+   EINA_SAFETY_ON_NULL_RETURN(video);
+
+   if(!video->ec || !video->follow_topmost_visibility)
+     return;
+
+   VIN("unset allowed_attribute");
+
+   video->allowed_attribute= EINA_FALSE;
+
+}
+
 static const struct tizen_video_object_interface _e_devicemgr_video_object_interface =
 {
    _e_devicemgr_video_object_cb_destroy,
    _e_devicemgr_video_object_cb_set_attribute,
    _e_devicemgr_video_object_cb_follow_topmost_visibility,
    _e_devicemgr_video_object_cb_unfollow_topmost_visibility,
+   _e_devicemgr_video_object_cb_allowed_attribute,
+   _e_devicemgr_video_object_cb_disallowed_attribute,
 };
 
 static void
@@ -2426,7 +2475,7 @@ e_devicemgr_video_init(void)
 
 
    /* try to add tizen_video to wayland globals */
-   if (!wl_global_create(e_comp_wl->wl.disp, &tizen_video_interface, 1,
+   if (!wl_global_create(e_comp_wl->wl.disp, &tizen_video_interface, 2,
                          NULL, _e_devicemgr_video_cb_bind))
      {
         ERR("Could not add tizen_video to wayland globals");
