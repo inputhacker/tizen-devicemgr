@@ -633,17 +633,8 @@ _e_video_geometry_cal_physical(E_Video *video)
    output = e_comp_wl_output_find(topmost);
    EINA_SAFETY_ON_NULL_GOTO(output, normal);
 
-   if (output->transform == 0)
-     goto normal;
-
    zone = e_comp_zone_xy_get(topmost->x, topmost->y);
    EINA_SAFETY_ON_NULL_GOTO(zone, normal);
-
-   e_comp_wl_rect_convert(zone->w, zone->h, output->transform, 1,
-                          video->geo.output_r.x, video->geo.output_r.y,
-                          video->geo.output_r.w, video->geo.output_r.h,
-                          &video->tdm_output_r.x, &video->tdm_output_r.y,
-                          &video->tdm_output_r.w, &video->tdm_output_r.h);
 
    tran = video->geo.transform & 0x3;
    flip = video->geo.transform & 0x4;
@@ -688,6 +679,15 @@ _e_video_geometry_cal_physical(E_Video *video)
         else if (video->tdm_transform == TDM_TRANSFORM_FLIPPED_270)
           video->tdm_transform = TDM_TRANSFORM_FLIPPED_90;
      }
+
+   if (output->transform == 0)
+     video->tdm_output_r = video->geo.output_r;
+   else
+     e_comp_wl_rect_convert(zone->w, zone->h, output->transform, 1,
+                            video->geo.output_r.x, video->geo.output_r.y,
+                            video->geo.output_r.w, video->geo.output_r.h,
+                            &video->tdm_output_r.x, &video->tdm_output_r.y,
+                            &video->tdm_output_r.w, &video->tdm_output_r.h);
 
    VDB("geomtry: screen(%d,%d %dx%d | %d) => %d => physical(%d,%d %dx%d | %d)",
        EINA_RECTANGLE_ARGS(&video->geo.output_r), video->geo.transform, transform,
