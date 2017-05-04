@@ -730,15 +730,22 @@ find_keycode(struct xkb_keymap *keymap, xkb_keycode_t key, void *data)
    xkb_keysym_t keysym = found_keycodes->keysym;
    int nsyms = 0;
    const xkb_keysym_t *syms_out = NULL;
+   xkb_keycode_t * tmp_keycodes;
 
    nsyms = xkb_keymap_key_get_syms_by_level(keymap, key, 0, 0, &syms_out);
    if (nsyms && syms_out)
      {
         if (*syms_out == keysym)
           {
-             found_keycodes->nkeycodes++;
-             found_keycodes->keycodes = realloc(found_keycodes->keycodes, sizeof(int)*found_keycodes->nkeycodes);
-             found_keycodes->keycodes[found_keycodes->nkeycodes-1] = key;
+             tmp_keycodes = calloc(sizeof(xkb_keycode_t), found_keycodes->nkeycodes + 1);
+             if (tmp_keycodes)
+               {
+                  memcpy(tmp_keycodes, found_keycodes->keycodes, found_keycodes->nkeycodes);
+                  free(found_keycodes->keycodes);
+                  found_keycodes->nkeycodes++;
+                  tmp_keycodes[found_keycodes->nkeycodes-1] = key;
+                  found_keycodes->keycodes = tmp_keycodes;
+               }
           }
      }
 }
