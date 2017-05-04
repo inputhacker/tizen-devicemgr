@@ -820,7 +820,7 @@ _e_input_devmgr_inputgen_resource_add(struct wl_resource *resource, char *name)
    EINA_SAFETY_ON_NULL_RETURN(rdata);
 
    rdata->resource = resource;
-   strncpy(rdata->name, name, UINPUT_MAX_NAME_SIZE);
+   strncpy(rdata->name, name, UINPUT_MAX_NAME_SIZE - 1);
 
    input_devmgr_data->inputgen.resource_list = eina_list_append(input_devmgr_data->inputgen.resource_list, rdata);
 }
@@ -1049,7 +1049,7 @@ _e_input_devmgr_create_keyboard_device(struct wl_client *client, struct uinput_u
      {
         device = E_NEW(e_devicemgr_inputgen_device_data, 1);
         if (!device) return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NO_SYSTEM_RESOURCES;
-        strncpy(device->name, uinp->name, UINPUT_MAX_NAME_SIZE);
+        strncpy(device->name, uinp->name, UINPUT_MAX_NAME_SIZE - 1);
      }
 
    cdata = NULL;
@@ -1142,7 +1142,7 @@ _e_input_devmgr_create_mouse_device(struct wl_client *client, struct uinput_user
      {
         device = E_NEW(e_devicemgr_inputgen_device_data, 1);
         if (!device) return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NO_SYSTEM_RESOURCES;
-        strncpy(device->name, uinp->name, UINPUT_MAX_NAME_SIZE);
+        strncpy(device->name, uinp->name, UINPUT_MAX_NAME_SIZE - 1);
      }
 
    cdata = NULL;
@@ -1242,7 +1242,7 @@ _e_input_devmgr_create_touch_device(struct wl_client *client, struct uinput_user
      {
         device = E_NEW(e_devicemgr_inputgen_device_data, 1);
         if (!device) return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NO_SYSTEM_RESOURCES;
-        strncpy(device->name, uinp->name, UINPUT_MAX_NAME_SIZE);
+        strncpy(device->name, uinp->name, UINPUT_MAX_NAME_SIZE - 1);
      }
 
    cdata = NULL;
@@ -1330,7 +1330,7 @@ _e_input_devmgr_cb_init_generator(struct wl_client *client, struct wl_resource *
 #endif
 
    memset(&uinp, 0, sizeof(uinp));
-   strncpy(uinp.name, "Input Generator", UINPUT_MAX_NAME_SIZE);
+   strncpy(uinp.name, "Input Generator", UINPUT_MAX_NAME_SIZE - 1);
    uinp.id.version = 4;
    uinp.id.bustype = BUS_VIRTUAL;
 
@@ -1367,7 +1367,7 @@ _e_input_devmgr_cb_init_generator_with_name(struct wl_client *client, struct wl_
 #endif
 
    memset(&uinp, 0, sizeof(uinp));
-   strncpy(uinp.name, name, UINPUT_MAX_NAME_SIZE);
+   strncpy(uinp.name, name, UINPUT_MAX_NAME_SIZE - 1);
    uinp.id.version = 4;
    uinp.id.bustype = BUS_VIRTUAL;
 
