@@ -1573,6 +1573,8 @@ err:
           free(output);
 
         eina_list_free(g_eom->outputs);
+
+        g_eom->outputs = NULL;
      }
 
    return EINA_FALSE;
@@ -1617,6 +1619,21 @@ _e_eom_deinit()
      {
         EINA_LIST_FREE(g_eom->handlers, h)
           ecore_event_handler_del(h);
+
+        g_eom->handlers = NULL;
+     }
+
+   if (g_eom->outputs)
+     {
+        Eina_List *l;
+        E_EomOutputPtr output;
+
+        EINA_LIST_FOREACH(g_eom->outputs, l, output)
+          free(output);
+
+        eina_list_free(g_eom->outputs);
+
+        g_eom->outputs = NULL;
      }
 
    if (g_eom->dpy)
