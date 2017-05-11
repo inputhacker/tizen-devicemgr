@@ -365,6 +365,25 @@ _e_tz_screenmirror_ui_buffer_get(E_Mirror *mirror)
    return mbuf;
 }
 
+static E_Devmgr_Buf*
+_e_tz_screenmirror_devicemgr_buffer_by_tbm_surface_get(E_Mirror *mirror, tbm_surface_h buffer)
+{
+   E_Devmgr_Buf *mbuf;
+   Eina_List *l;
+
+   EINA_LIST_FOREACH(mirror->ui_buffer_list, l, mbuf)
+     if (mbuf->tbm_surface == buffer)
+       return mbuf;
+
+   mbuf = e_devmgr_buffer_create_tbm(buffer);
+   EINA_SAFETY_ON_NULL_RETURN_VAL(mbuf, NULL);
+
+   e_devmgr_buffer_free_func_add(mbuf, _e_tz_screenmirror_ui_buffer_cb_free, mirror);
+   mirror->ui_buffer_list = eina_list_append(mirror->ui_buffer_list, mbuf);
+
+   return mbuf;
+}
+
 static void
 _e_tz_screenmirror_pp_destroy(E_Mirror *mirror)
 {
@@ -430,16 +449,109 @@ _e_tz_screenmirror_copy_tmp_buffer(E_Mirror_Buffer *buffer)
    buffer->tmp = NULL;
 }
 
+static Eina_Bool
+_e_tz_screenmirror_position_get(E_Mirror *mirror, E_Devmgr_Buf *mbuf, Eina_Rectangle *fit)
+{
+   E_Devmgr_Buf *ui = NULL;
+
+   ui = _e_tz_screenmirror_ui_buffer_get(mirror);
+   if (ui == NULL)
+     {
+        ERR("_e_tz_screenmirror_position_get: get ui buf failed");
+        return EINA_FALSE;
+     }
+
+   if (mirror->rotate_change)
+     _e_tz_screenmirror_center_rect(ui->height, ui->width, mbuf->width, mbuf->height, fit);
+   else
+     _e_tz_screenmirror_center_rect(ui->width, ui->height, mbuf->width, mbuf->height, fit);
+
+   return EINA_TRUE;
+}
+
+static void
+_e_tz_screenmirror_dump_still_get_cropinfo(E_Devmgr_Buf *tmp, E_Devmgr_Buf *dst, tdm_layer *layer,
+                                           int w, int h, Eina_Rectangle *pos, Eina_Rectangle *dst_crop, int rotate)
+{
+   tdm_info_layer info;
+   tdm_error err = TDM_ERROR_NONE;
+
+   dst_crop->x = 0;
+   dst_crop->y = 0;
+   dst_crop->w = 0;
+   dst_crop->h = 0;
+
+   err = tdm_layer_get_info(layer, &info);
+   EINA_SAFETY_ON_FALSE_RETURN(err == TDM_ERROR_NONE);
+
+   if (info.src_config.pos.w == w && info.src_config.pos.h == h &&
+       pos->x == 0 && pos->y == 0 && pos->w == tmp->width && pos->h == tmp->height)
+     {
+        dst_crop->x = pos->x;
+        dst_crop->y = pos->y;
+        dst_crop->w = pos->w;
+        dst_crop->h = pos->h;
+     }
+   else if ((w == pos->w) && (h == pos->h))
+     {
+        dst_crop->x = info.dst_pos.x + pos->x;
+        dst_crop->y = info.dst_pos.y + pos->y;
+        dst_crop->w = info.dst_pos.w;
+        dst_crop->h = info.dst_pos.h;
+     }
+   else if ((info.src_config.pos.w == w && info.src_config.pos.h == h) || (rotate == 0))
+     {
+        dst_crop->x = info.dst_pos.x * pos->w / w + pos->x;
+        dst_crop->y = info.dst_pos.y * pos->h / h + pos->y;
+        dst_crop->w = info.dst_pos.w * pos->w / w;
+        dst_crop->h = info.dst_pos.h * pos->h / h;
+     }
+   else if (rotate == 90)
+     {
+        dst_crop->x = (h - info.dst_pos.y - info.dst_pos.h) *
+        pos->w / h + pos->x;
+        dst_crop->y = info.dst_pos.x * pos->h / w + pos->y;
+        dst_crop->w = info.dst_pos.h * pos->w / h;
+        dst_crop->h = info.dst_pos.w * pos->h / w;
+     }
+/*
+   else if (transform == TDM_TRANSFORM_180 || transform == TDM_TRANSFORM_FLIPPED_180)
+     {
+        dst_crop->x = (w - info.dst_pos.x - info.dst_pos.w) *
+        pos->w / w + pos->x;
+        dst_crop->y = (h - info.dst_pos.y - info.dst_pos.h) *
+        pos->h / h + pos->y;
+        dst_crop->w = info.dst_pos.w * pos->w / w;
+        dst_crop->h = info.dst_pos.h * pos->h / h;
+     }
+*/
+   else if (rotate == 270)
+     {
+        dst_crop->x = info.dst_pos.y * pos->w / h + pos->x;
+        dst_crop->y = (w - info.dst_pos.x - info.dst_pos.w) *
+        pos->h / w + pos->y;
+        dst_crop->w = info.dst_pos.h * pos->w / h;
+        dst_crop->h = info.dst_pos.w * pos->h / w;
+     }
+   else
+     {
+        dst_crop->x = pos->x;
+        dst_crop->y = pos->y;
+        dst_crop->w = pos->w;
+        dst_crop->h = pos->h;
+        ERR("_e_tz_screenmirror_dump_still_get_cropinfo: unknown case error");
+     }
+}
+
 static void
 _e_tz_screenmirror_dump_still(E_Mirror_Buffer *buffer)
 {
    E_Mirror *mirror = buffer->mirror;
-   E_Devmgr_Buf *video, *ui, *dst;
-   Eina_Rectangle vr, ur;
-   Eina_List *video_list, *l;
-   E_Video *vdo;
+   E_Devmgr_Buf *ui, *dst;
+   tdm_error err = TDM_ERROR_NONE;
+   int count;
+   int i;
    int rotate = 0;
-   int scale_width, scale_height;
 
    if (buffer->mbuf->type == TYPE_SHM)
      {
@@ -457,61 +569,54 @@ _e_tz_screenmirror_dump_still(E_Mirror_Buffer *buffer)
 
    e_devmgr_buffer_clear(dst);
 
-   /* get ui buffer */
    ui = _e_tz_screenmirror_ui_buffer_get(mirror);
    EINA_SAFETY_ON_NULL_RETURN(ui);
 
    if (mirror->rotate_change)
      {
-        scale_width = ui->height;
-        scale_height = ui->width;
-
         if (mirror->angle == 90)
           rotate = 90;
         else if (mirror->angle == 270)
           rotate = 270;
      }
-   else
+
+   err = tdm_output_get_layer_count(mirror->tdm_output, &count);
+   EINA_SAFETY_ON_FALSE_RETURN(err == TDM_ERROR_NONE);
+   EINA_SAFETY_ON_FALSE_RETURN(count >= 0);
+
+   for (i = 0; i < count; i++)
      {
-        scale_width = ui->width;
-        scale_height = ui->height;
+        tdm_layer *layer;
+        tbm_surface_h surface = NULL;
+        E_Devmgr_Buf *tmp = NULL;
+        Eina_Rectangle dst_pos;
+        Eina_Rectangle dst_crop;
+
+        layer = tdm_output_get_layer(mirror->tdm_output, i, &err);
+        EINA_SAFETY_ON_FALSE_RETURN(err == TDM_ERROR_NONE);
+
+        if (layer != mirror->tdm_primary_layer)
+          {
+             surface = tdm_layer_get_displaying_buffer(layer, &err);
+             if (surface == NULL)
+               continue;
+
+             tmp = _e_tz_screenmirror_devicemgr_buffer_by_tbm_surface_get(mirror, surface);
+             if (tmp == NULL)
+               continue;
+          }
+        else
+          tmp = ui;
+
+        _e_tz_screenmirror_position_get(mirror, buffer->mbuf, &dst_pos);
+
+        _e_tz_screenmirror_dump_still_get_cropinfo(tmp, dst, layer, ui->width, ui->height, &dst_pos, &dst_crop, rotate);
+
+        e_devmgr_buffer_convert(tmp, dst, 0, 0, tmp->width, tmp->height,
+                                dst_crop.x, dst_crop.y, dst_crop.w, dst_crop.h,
+                                EINA_TRUE, rotate, 0, 0);
+
      }
-
-   video_list = e_devicemgr_video_list_get();
-   EINA_LIST_FOREACH(video_list, l, vdo)
-     {
-        if (mirror->drm_output != e_devicemgr_video_drm_output_get(vdo))
-          continue;
-
-        /* get video buffer */
-        video = e_devicemgr_video_fb_get(vdo);
-        if (!video)
-          continue;
-
-        e_devicemgr_video_pos_get(vdo, &vr.x, &vr.y);
-        vr.w = video->width;
-        vr.h = video->height;
-
-        _e_tz_screenmirror_rect_scale(scale_width, scale_height, dst->width, dst->height, &vr);
-
-        /* dump video buffer */
-        e_devmgr_buffer_convert(video, dst,
-                                0, 0, video->width, video->height,
-                                vr.x, vr.y, vr.w, vr.h,
-                                EINA_FALSE, rotate, 0, 0);
-     }
-
-   ur.x = ur.y = 0;
-   ur.w = ui->width;
-   ur.h = ui->height;
-
-   _e_tz_screenmirror_center_rect(scale_width, scale_height, dst->width, dst->height, &ur);
-
-   /* dump ui buffer */
-   e_devmgr_buffer_convert(ui, dst,
-                           0, 0, ui->width, ui->height,
-                           ur.x, ur.y, ur.w, ur.h,
-                           EINA_TRUE, rotate, 0, 0);
 
    if (buffer->mbuf->type == TYPE_SHM)
      _e_tz_screenmirror_copy_tmp_buffer(buffer);
@@ -681,26 +786,6 @@ _e_tz_screenmirror_get_angle()
      return ec->e.state.rot.ang.curr;
 
    return 0;
-}
-
-static Eina_Bool
-_e_tz_screenmirror_position_get(E_Mirror *mirror, E_Devmgr_Buf *mbuf, Eina_Rectangle *fit)
-{
-   E_Devmgr_Buf *ui = NULL;
-
-   ui = _e_tz_screenmirror_ui_buffer_get(mirror);
-   if (ui == NULL)
-     {
-        ERR("_e_tz_screenmirror_position_get: get ui buf failed");
-        return EINA_FALSE;
-     }
-
-   if (mirror->rotate_change)
-     _e_tz_screenmirror_center_rect(ui->height, ui->width, mbuf->width, mbuf->height, fit);
-   else
-     _e_tz_screenmirror_center_rect(ui->width, ui->height, mbuf->width, mbuf->height, fit);
-
-   return EINA_TRUE;
 }
 
 static Eina_Bool
