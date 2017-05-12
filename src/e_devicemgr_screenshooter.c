@@ -443,10 +443,16 @@ _e_tz_screenmirror_tmp_buffer_create(E_Mirror_Buffer *buffer)
 static void
 _e_tz_screenmirror_copy_tmp_buffer(E_Mirror_Buffer *buffer)
 {
+   tbm_surface_h tbm_surface = NULL;
+
    e_devmgr_buffer_copy(buffer->tmp, buffer->mbuf);
+
+   tbm_surface = buffer->tmp->tbm_surface;
 
    e_devmgr_buffer_unref(buffer->tmp);
    buffer->tmp = NULL;
+
+   tbm_surface_destroy(tbm_surface);
 }
 
 static Eina_Bool
