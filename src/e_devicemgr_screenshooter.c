@@ -51,6 +51,7 @@ typedef struct _E_Mirror
    Eina_List *buffer_clear_check;
 
    /* rotation info */
+   int eout_rotate;
    int angle;
    Eina_Bool rotate_change;
 
@@ -455,6 +456,83 @@ _e_tz_screenmirror_copy_tmp_buffer(E_Mirror_Buffer *buffer)
    tbm_surface_destroy(tbm_surface);
 }
 
+static void
+_e_tz_screenmirror_showing_rect_get(Eina_Rectangle *out_rect, Eina_Rectangle *dst_rect, Eina_Rectangle *showing_rect)
+{
+   showing_rect->x = dst_rect->x;
+   showing_rect->y = dst_rect->y;
+
+   if (dst_rect->x >= out_rect->w)
+     showing_rect->w = 0;
+   else if (dst_rect->x + dst_rect->w > out_rect->w)
+     showing_rect->w = out_rect->w - dst_rect->x;
+   else
+     showing_rect->w = dst_rect->w;
+
+   if (dst_rect->y >= out_rect->h)
+        showing_rect->w = 0;
+   else if (dst_rect->y + dst_rect->h > out_rect->h)
+     showing_rect->h = out_rect->h - dst_rect->y;
+   else
+     showing_rect->h = dst_rect->h;
+}
+
+static Eina_Bool
+_e_tz_screenmirror_src_crop_get(E_Mirror *mirror, tdm_layer *layer, Eina_Rectangle *fit, Eina_Rectangle *showing_rect)
+{
+   tdm_info_layer info;
+   tdm_error err = TDM_ERROR_NONE;
+   const tdm_output_mode *mode = NULL;
+   float ratio_x, ratio_y;
+   Eina_Rectangle out_rect;
+   Eina_Rectangle dst_rect;
+
+   fit->x = 0;
+   fit->y = 0;
+   fit->w = 0;
+   fit->h = 0;
+
+   tdm_output_get_mode(mirror->tdm_output, &mode);
+   EINA_SAFETY_ON_FALSE_RETURN_VAL(err == TDM_ERROR_NONE, EINA_FALSE);
+
+   out_rect.x = 0;
+   out_rect.y = 0;
+   out_rect.w = mode->hdisplay;
+   out_rect.h = mode->vdisplay;
+
+   err = tdm_layer_get_info(layer, &info);
+   EINA_SAFETY_ON_FALSE_RETURN_VAL(err == TDM_ERROR_NONE, EINA_FALSE);
+
+   dst_rect.x = info.dst_pos.x;
+   dst_rect.y = info.dst_pos.y;
+   dst_rect.w = info.dst_pos.w;
+   dst_rect.h = info.dst_pos.h;
+
+   _e_tz_screenmirror_showing_rect_get(&out_rect, &dst_rect, showing_rect);
+
+   fit->x = info.src_config.pos.x;
+   fit->y = info.src_config.pos.y;
+
+   if (info.transform % 2 == 0)
+     {
+        ratio_x = (float)info.src_config.pos.w / dst_rect.w;
+        ratio_y = (float)info.src_config.pos.h / dst_rect.h;
+
+        fit->w = showing_rect->w * ratio_x;
+        fit->h = showing_rect->h * ratio_y;
+     }
+   else
+     {
+        ratio_x = (float)info.src_config.pos.w / dst_rect.h;
+        ratio_y = (float)info.src_config.pos.h / dst_rect.w;
+
+        fit->w = showing_rect->h * ratio_x;
+        fit->h = showing_rect->w * ratio_y;
+     }
+
+   return EINA_TRUE;
+}
+
 static Eina_Bool
 _e_tz_screenmirror_position_get(E_Mirror *mirror, E_Devmgr_Buf *mbuf, Eina_Rectangle *fit)
 {
@@ -467,7 +545,8 @@ _e_tz_screenmirror_position_get(E_Mirror *mirror, E_Devmgr_Buf *mbuf, Eina_Recta
         return EINA_FALSE;
      }
 
-   if (mirror->rotate_change)
+   if (screenshot_auto_rotation &&
+       ((mirror->angle + mirror->eout_rotate) % 360 == 90 || (mirror->angle + mirror->eout_rotate) % 360 == 270))
      _e_tz_screenmirror_center_rect(ui->height, ui->width, mbuf->width, mbuf->height, fit);
    else
      _e_tz_screenmirror_center_rect(ui->width, ui->height, mbuf->width, mbuf->height, fit);
@@ -477,7 +556,8 @@ _e_tz_screenmirror_position_get(E_Mirror *mirror, E_Devmgr_Buf *mbuf, Eina_Recta
 
 static void
 _e_tz_screenmirror_dump_still_get_cropinfo(E_Devmgr_Buf *tmp, E_Devmgr_Buf *dst, tdm_layer *layer,
-                                           int w, int h, Eina_Rectangle *pos, Eina_Rectangle *dst_crop, int rotate)
+                                           int w, int h, Eina_Rectangle *pos, Eina_Rectangle *showing_pos,
+                                           Eina_Rectangle *dst_crop, int rotate)
 {
    tdm_info_layer info;
    tdm_error err = TDM_ERROR_NONE;
@@ -498,46 +578,40 @@ _e_tz_screenmirror_dump_still_get_cropinfo(E_Devmgr_Buf *tmp, E_Devmgr_Buf *dst,
         dst_crop->w = pos->w;
         dst_crop->h = pos->h;
      }
-   else if ((w == pos->w) && (h == pos->h))
+   else if ((w == pos->w) && (h == pos->h) && (showing_pos->w == pos->w) && (showing_pos->h == pos->h))
      {
         dst_crop->x = info.dst_pos.x + pos->x;
         dst_crop->y = info.dst_pos.y + pos->y;
         dst_crop->w = info.dst_pos.w;
         dst_crop->h = info.dst_pos.h;
      }
-   else if ((info.src_config.pos.w == w && info.src_config.pos.h == h) || (rotate == 0))
+   else if (rotate == 0)
      {
-        dst_crop->x = info.dst_pos.x * pos->w / w + pos->x;
-        dst_crop->y = info.dst_pos.y * pos->h / h + pos->y;
-        dst_crop->w = info.dst_pos.w * pos->w / w;
-        dst_crop->h = info.dst_pos.h * pos->h / h;
+        dst_crop->x = showing_pos->x * pos->w / w + pos->x;
+        dst_crop->y = showing_pos->y * pos->h / h + pos->y;
+        dst_crop->w = showing_pos->w * pos->w / w;
+        dst_crop->h = showing_pos->h * pos->h / h;
      }
    else if (rotate == 90)
      {
-        dst_crop->x = (h - info.dst_pos.y - info.dst_pos.h) *
-        pos->w / h + pos->x;
-        dst_crop->y = info.dst_pos.x * pos->h / w + pos->y;
-        dst_crop->w = info.dst_pos.h * pos->w / h;
-        dst_crop->h = info.dst_pos.w * pos->h / w;
+        dst_crop->x = (h - showing_pos->y - showing_pos->h) * pos->w / h + pos->x;
+        dst_crop->y = showing_pos->x * pos->h / w + pos->y;
+        dst_crop->w = showing_pos->h * pos->w / h;
+        dst_crop->h = showing_pos->w * pos->h / w;
      }
-/*
-   else if (transform == TDM_TRANSFORM_180 || transform == TDM_TRANSFORM_FLIPPED_180)
+   else if (rotate == 180)
      {
-        dst_crop->x = (w - info.dst_pos.x - info.dst_pos.w) *
-        pos->w / w + pos->x;
-        dst_crop->y = (h - info.dst_pos.y - info.dst_pos.h) *
-        pos->h / h + pos->y;
-        dst_crop->w = info.dst_pos.w * pos->w / w;
-        dst_crop->h = info.dst_pos.h * pos->h / h;
+        dst_crop->x = (w - showing_pos->x - showing_pos->w) * pos->w / w + pos->x;
+        dst_crop->y = (h - showing_pos->y - showing_pos->h) * pos->h / h + pos->y;
+        dst_crop->w = showing_pos->w * pos->w / w;
+        dst_crop->h = showing_pos->h * pos->h / h;
      }
-*/
    else if (rotate == 270)
      {
-        dst_crop->x = info.dst_pos.y * pos->w / h + pos->x;
-        dst_crop->y = (w - info.dst_pos.x - info.dst_pos.w) *
-        pos->h / w + pos->y;
-        dst_crop->w = info.dst_pos.h * pos->w / h;
-        dst_crop->h = info.dst_pos.w * pos->h / w;
+        dst_crop->x = showing_pos->y * pos->w / h + pos->x;
+        dst_crop->y = (w - showing_pos->x - showing_pos->w) * pos->h / w + pos->y;
+        dst_crop->w = showing_pos->h * pos->w / h;
+        dst_crop->h = showing_pos->w * pos->h / w;
      }
    else
      {
@@ -580,11 +654,22 @@ _e_tz_screenmirror_dump_still(E_Mirror_Buffer *buffer)
 
    if (mirror->rotate_change)
      {
-        if (mirror->angle == 90)
+        int angle = 0;
+
+        angle = (mirror->angle + mirror->eout_rotate) % 360;
+        if (angle == 90)
           rotate = 90;
-        else if (mirror->angle == 270)
+        else if (angle == 180)
+          rotate = 180;
+        else if (angle == 270)
           rotate = 270;
      }
+   else if (screenshot_auto_rotation && mirror->eout_rotate == 90)
+     rotate = 90;
+   else if (screenshot_auto_rotation && mirror->eout_rotate == 180)
+     rotate = 180;
+   else if (screenshot_auto_rotation && mirror->eout_rotate == 270)
+     rotate = 270;
 
    err = tdm_output_get_layer_count(mirror->tdm_output, &count);
    EINA_SAFETY_ON_FALSE_RETURN(err == TDM_ERROR_NONE);
@@ -596,7 +681,9 @@ _e_tz_screenmirror_dump_still(E_Mirror_Buffer *buffer)
         tbm_surface_h surface = NULL;
         E_Devmgr_Buf *tmp = NULL;
         Eina_Rectangle dst_pos;
+        Eina_Rectangle showing_pos;
         Eina_Rectangle dst_crop;
+        Eina_Rectangle src_crop;
 
         layer = tdm_output_get_layer(mirror->tdm_output, i, &err);
         EINA_SAFETY_ON_FALSE_RETURN(err == TDM_ERROR_NONE);
@@ -610,15 +697,24 @@ _e_tz_screenmirror_dump_still(E_Mirror_Buffer *buffer)
              tmp = _e_tz_screenmirror_devicemgr_buffer_by_tbm_surface_get(mirror, surface);
              if (tmp == NULL)
                continue;
+
+             _e_tz_screenmirror_src_crop_get(mirror, layer, &src_crop, &showing_pos);
           }
         else
-          tmp = ui;
+          {
+             tmp = ui;
+             src_crop.x = showing_pos.x = 0;
+             src_crop.y = showing_pos.y = 0;
+             src_crop.w = showing_pos.w = tmp->width;
+             src_crop.h = showing_pos.h = tmp->height;
+          }
 
         _e_tz_screenmirror_position_get(mirror, buffer->mbuf, &dst_pos);
 
-        _e_tz_screenmirror_dump_still_get_cropinfo(tmp, dst, layer, ui->width, ui->height, &dst_pos, &dst_crop, rotate);
-
-        e_devmgr_buffer_convert(tmp, dst, 0, 0, tmp->width, tmp->height,
+        _e_tz_screenmirror_dump_still_get_cropinfo(tmp, dst, layer, ui->width, ui->height,
+                                                   &dst_pos, &showing_pos, &dst_crop, rotate);
+        e_devmgr_buffer_convert(tmp, dst,
+                                src_crop.x, src_crop.y, src_crop.w, src_crop.h,
                                 dst_crop.x, dst_crop.y, dst_crop.w, dst_crop.h,
                                 EINA_TRUE, rotate, 0, 0);
 
@@ -782,16 +878,24 @@ _e_tz_screenmirror_top_visible_ec_get()
    return NULL;
 }
 
-static int
-_e_tz_screenmirror_get_angle()
+static void
+_e_tz_screenmirror_get_angle(E_Mirror *mirror)
 {
-   E_Client *ec;
+   E_Client *ec = NULL;
+   E_Output *eout = NULL;
+
+   mirror->eout_rotate = 0;
+   mirror->angle = 0;
 
    ec = _e_tz_screenmirror_top_visible_ec_get();
    if (ec)
-     return ec->e.state.rot.ang.curr;
+     {
+        mirror->angle = ec->e.state.rot.ang.curr;
 
-   return 0;
+        eout = e_output_find(ec->zone->output_id);
+        if (eout)
+          mirror->eout_rotate = eout->config.rotation;
+     }
 }
 
 static Eina_Bool
@@ -862,11 +966,22 @@ _e_tz_screenmirror_tdm_capture_support(E_Mirror_Buffer *buffer, tdm_capture_capa
 
              if (mirror->rotate_change)
                {
-                  if (mirror->angle == 90)
+                  int tmp;
+
+                  tmp = (mirror->angle + mirror->eout_rotate) % 360;
+                  if (tmp == 90)
                     capture_info.transform = TDM_TRANSFORM_90;
-                  else /* 270 */
+                  else if (tmp == 180)
+                    capture_info.transform = TDM_TRANSFORM_180;
+                  else if (tmp == 270)
                     capture_info.transform = TDM_TRANSFORM_270;
                }
+             else if (screenshot_auto_rotation && mirror->eout_rotate == 90)
+               capture_info.transform = TDM_TRANSFORM_90;
+             else if (screenshot_auto_rotation && mirror->eout_rotate == 180)
+               capture_info.transform = TDM_TRANSFORM_180;
+             else if (screenshot_auto_rotation && mirror->eout_rotate == 270)
+               capture_info.transform = TDM_TRANSFORM_270;
           }
 
         err = tdm_capture_set_info(capture, &capture_info);
@@ -1670,7 +1785,7 @@ _e_screenshooter_cb_shoot(struct wl_client *client,
         goto dump_done;
      }
 
-   mirror->angle = _e_tz_screenmirror_get_angle();
+   _e_tz_screenmirror_get_angle(mirror);
    if (screenshot_auto_rotation)
      if (mirror->angle == 90 || mirror->angle == 270)
        mirror->rotate_change = EINA_TRUE;
