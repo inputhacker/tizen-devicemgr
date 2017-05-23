@@ -1898,7 +1898,7 @@ _e_input_devmgr_cb_pointer_warp(struct wl_client *client, struct wl_resource *re
    new_x = wl_fixed_to_int(x);
    new_y = wl_fixed_to_int(y);
    if (e_client_transform_core_enable_get(ec))
-     e_client_transform_core_input_inv_transform(ec, wl_fixed_to_int(x), wl_fixed_to_int(y), &new_x, &new_y);
+     e_client_transform_core_input_inv_rect_transform(ec, wl_fixed_to_int(x), wl_fixed_to_int(y), &new_x, &new_y);
 
    ret = _e_devicemgr_pointer_warp(ec->client.x + new_x, ec->client.y + new_y);
    tizen_input_device_manager_send_error(resource, ret);
