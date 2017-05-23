@@ -46,8 +46,6 @@ e_modapi_init(E_Module *m)
         return NULL;
      }
 
-   eina_log_domain_level_set("e-devicemgr", EINA_LOG_LEVEL_INFO);
-
    dconfig = E_NEW(E_Devicemgr_Config_Data, 1);
    if (!dconfig)
      {
