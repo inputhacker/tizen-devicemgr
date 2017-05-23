@@ -1122,7 +1122,8 @@ _e_video_frame_buffer_show(E_Video *video, E_Devmgr_Buf *mbuf)
    tdm_info_layer info, old_info;
    tdm_error ret;
    E_Client *topmost;
-   Eina_Bool first_commit = EINA_FALSE;
+   Tdm_Prop_Value *prop;
+   Eina_List *l = NULL;
 
    if (!mbuf)
      {
@@ -1150,7 +1151,6 @@ _e_video_frame_buffer_show(E_Video *video, E_Devmgr_Buf *mbuf)
              VIN("call property(%s), value(%d)", prop->name, (unsigned int)prop->value.u32);
              tdm_layer_set_property(video->layer, prop->id, prop->value);
           }
-        first_commit = EINA_TRUE;
      }
 
    CLEAR(old_info);
@@ -1187,16 +1187,10 @@ _e_video_frame_buffer_show(E_Video *video, E_Devmgr_Buf *mbuf)
 
    video->waiting_vblank = EINA_TRUE;
 
-   if (first_commit && video->layer)
+   EINA_LIST_FOREACH(video->late_tdm_prop_list, l, prop)
      {
-        // need late call tdm property in list
-        Tdm_Prop_Value *prop;
-        Eina_List *l = NULL;
-        EINA_LIST_FOREACH(video->late_tdm_prop_list, l, prop)
-          {
-             VIN("call property(%s), value(%d)", prop->name, (unsigned int)prop->value.u32);
-             tdm_layer_set_property(video->layer, prop->id, prop->value);
-          }
+        VIN("call property(%s), value(%d)", prop->name, (unsigned int)prop->value.u32);
+        tdm_layer_set_property(video->layer, prop->id, prop->value);
      }
 
    topmost = find_topmost_parent_get(video->ec);
@@ -1312,6 +1306,7 @@ _e_video_cb_evas_show(void *data, Evas *e EINA_UNUSED, Evas_Object *obj EINA_UNU
    if ((video->ec->comp_data->sub.data && video->ec->comp_data->sub.data->stand_alone) ||
        (video->ec->comp_data->sub.data && video->follow_topmost_visibility))
      {
+#if 0 //mute off is managed by client. mute off in server made many issues.
         if (!video->layer) return;
 
         if (video->tdm_mute_id != -1)
@@ -1320,6 +1315,7 @@ _e_video_cb_evas_show(void *data, Evas *e EINA_UNUSED, Evas_Object *obj EINA_UNU
              VIN("video surface show. mute off (ec:%p)", video->ec);
              tdm_layer_set_property(video->layer, video->tdm_mute_id, v);
           }
+#endif
         return;
      }
 
@@ -2166,6 +2162,22 @@ _e_devicemgr_video_object_cb_set_attribute(struct wl_client *client,
           }
      }
 
+   if (!_e_video_is_visible(video))
+     {
+        /* if mute off, need to do it after buffer commit */
+        if (!strncmp(props[i].name, "mute", TDM_NAME_LEN && value == 0))
+          {
+             Tdm_Prop_Value *prop = calloc(1, sizeof(Tdm_Prop_Value));
+             if(!prop) return;
+             prop->value.u32 = value;
+             prop->id = props[i].id;
+             memcpy(prop->name, props[i].name, sizeof(props[i].name));
+             VIN("Add property(%s) value(%d)", prop->name, value);
+             video->late_tdm_prop_list = eina_list_append(video->late_tdm_prop_list, prop);
+             return;
+          }
+     }
+
    // check set video layer
    if(!video->layer)
      {
@@ -2199,14 +2211,7 @@ _e_devicemgr_video_object_cb_set_attribute(struct wl_client *client,
         prop->id = props[i].id;
         memcpy(prop->name, props[i].name, sizeof(props[i].name));
         VIN("Add property(%s) value(%d)", prop->name, value);
-        if (!strncmp(prop->name, "mute", TDM_NAME_LEN))
-          {
-             video->late_tdm_prop_list = eina_list_append(video->late_tdm_prop_list, prop);
-          }
-        else
-          {
-             video->tdm_prop_list = eina_list_append(video->tdm_prop_list, prop);
-          }
+        video->tdm_prop_list = eina_list_append(video->tdm_prop_list, prop);
      }
    // if set layer call property
    else
@@ -2247,7 +2252,7 @@ _e_devicemgr_video_object_cb_unfollow_topmost_visibility(struct wl_client *clien
    if(!video->ec || !video->follow_topmost_visibility)
      return;
 
-   VIN("unset follow_topmost_visibility");
+   VIN("set unfollow_topmost_visibility");
 
    video->follow_topmost_visibility= EINA_FALSE;
 
