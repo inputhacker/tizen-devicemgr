@@ -2280,10 +2280,10 @@ _e_devicemgr_video_object_cb_disallowed_attribute(struct wl_client *client,
    video = wl_resource_get_user_data(resource);
    EINA_SAFETY_ON_NULL_RETURN(video);
 
-   if(!video->ec || !video->follow_topmost_visibility)
+   if(!video->ec || !video->allowed_attribute)
      return;
 
-   VIN("unset allowed_attribute");
+   VIN("set disallowed_attribute");
 
    video->allowed_attribute= EINA_FALSE;
 
