@@ -1442,7 +1442,7 @@ _e_video_set(E_Video *video, E_Client *ec)
    int ominw = -1, ominh = -1, omaxw = -1, omaxh = -1;
    int i, count = 0;
    tdm_display_capability disp_capabilities;
-   tdm_layer_capability lyr_capabilities;
+   tdm_layer_capability lyr_capabilities = 0;
    const tdm_prop *props;
    tdm_layer *layer;
 
