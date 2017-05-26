@@ -7,7 +7,7 @@
 #include "e_devicemgr_tdm.h"
 #include "e_devicemgr_dpms.h"
 
-//#define CHECKING_PRIMARY_ZPOS
+#define CHECKING_PRIMARY_ZPOS
 
 E_DevMgr_Display *e_devmgr_dpy;
 static Eina_List *e_devmgr_dpy_layers;
