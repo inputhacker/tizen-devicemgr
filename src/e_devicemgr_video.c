@@ -2165,7 +2165,7 @@ _e_devicemgr_video_object_cb_set_attribute(struct wl_client *client,
    if (!_e_video_is_visible(video))
      {
         /* if mute off, need to do it after buffer commit */
-        if (!strncmp(props[i].name, "mute", TDM_NAME_LEN && value == 0))
+        if (!strncmp(props[i].name, "mute", TDM_NAME_LEN) && value == 0)
           {
              Tdm_Prop_Value *prop = calloc(1, sizeof(Tdm_Prop_Value));
              if(!prop) return;
