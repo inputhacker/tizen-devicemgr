@@ -2226,27 +2226,7 @@ _e_devicemgr_video_object_cb_set_attribute(struct wl_client *client,
         /* if mute off, need to do it after buffer commit */
         if (!strncmp(props[i].name, "mute", TDM_NAME_LEN && value == 0))
           {
-             Tdm_Prop_Value *prop;
-             const Eina_List *l = NULL;
-
-             EINA_LIST_FOREACH(video->tdm_prop_list, l, prop)
-                {
-                   if (!strncmp(name, prop->name, TDM_NAME_LEN))
-                    {
-                         prop->value.u32 = value;
-                         return;
-                   }
-                 }
-             EINA_LIST_FOREACH(video->late_tdm_prop_list, l, prop)
-               {
-                   if (!strncmp(name, prop->name, TDM_NAME_LEN))
-                     {
-                        prop->value.u32 = value;
-                        return;
-                     }
-                }
-
-             prop = calloc(1, sizeof(Tdm_Prop_Value));
+             Tdm_Prop_Value *prop = calloc(1, sizeof(Tdm_Prop_Value));
              if(!prop) return;
              prop->value.u32 = value;
              prop->id = props[i].id;
