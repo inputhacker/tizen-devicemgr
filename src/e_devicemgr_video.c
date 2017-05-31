@@ -1176,7 +1176,6 @@ _e_video_frame_buffer_show(E_Video *video, E_Devmgr_Buf *mbuf)
    tdm_error ret;
    E_Client *topmost;
    Tdm_Prop_Value *prop;
-   Eina_List *l = NULL;
 
    if (!mbuf)
      {
@@ -1198,11 +1197,11 @@ _e_video_frame_buffer_show(E_Video *video, E_Devmgr_Buf *mbuf)
           }
         // need call tdm property in list
         Tdm_Prop_Value *prop;
-        Eina_List *l = NULL;
-        EINA_LIST_FOREACH(video->tdm_prop_list, l, prop)
+        EINA_LIST_FREE(video->tdm_prop_list, prop)
           {
              VIN("call property(%s), value(%d)", prop->name, (unsigned int)prop->value.u32);
              tdm_layer_set_property(video->layer, prop->id, prop->value);
+             free(prop);
           }
      }
 
@@ -1240,10 +1239,11 @@ _e_video_frame_buffer_show(E_Video *video, E_Devmgr_Buf *mbuf)
 
    video->waiting_vblank = EINA_TRUE;
 
-   EINA_LIST_FOREACH(video->late_tdm_prop_list, l, prop)
+   EINA_LIST_FREE(video->late_tdm_prop_list, prop)
      {
         VIN("call property(%s), value(%d)", prop->name, (unsigned int)prop->value.u32);
         tdm_layer_set_property(video->layer, prop->id, prop->value);
+        free(prop);
      }
 
    topmost = find_topmost_parent_get(video->ec);
@@ -2221,13 +2221,27 @@ _e_devicemgr_video_object_cb_set_attribute(struct wl_client *client,
           }
      }
 
-   if (!_e_video_is_visible(video))
+   if (!_e_video_is_visible(video) || !video->layer)
      {
         /* if mute off, need to do it after buffer commit */
         if (!strncmp(props[i].name, "mute", TDM_NAME_LEN) && value == 0)
           {
-             Tdm_Prop_Value *prop = calloc(1, sizeof(Tdm_Prop_Value));
+             Tdm_Prop_Value *prop = NULL;
+             const Eina_List *l = NULL;
+
+             EINA_LIST_FOREACH(video->late_tdm_prop_list, l, prop)
+               {
+                  if (!strncmp(name, prop->name, TDM_NAME_LEN))
+                    {
+                       prop->value.u32 = value;
+                       VDB("update property(%s) value(%d)", prop->name, value);
+                       return;
+                    }
+               }
+
+             prop = calloc(1, sizeof(Tdm_Prop_Value));
              if(!prop) return;
+
              prop->value.u32 = value;
              prop->id = props[i].id;
              memcpy(prop->name, props[i].name, sizeof(props[i].name));
