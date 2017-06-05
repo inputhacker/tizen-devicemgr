@@ -470,7 +470,7 @@ _e_tz_screenmirror_showing_rect_get(Eina_Rectangle *out_rect, Eina_Rectangle *ds
      showing_rect->w = dst_rect->w;
 
    if (dst_rect->y >= out_rect->h)
-        showing_rect->w = 0;
+     showing_rect->h = 0;
    else if (dst_rect->y + dst_rect->h > out_rect->h)
      showing_rect->h = out_rect->h - dst_rect->y;
    else
