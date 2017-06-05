@@ -680,10 +680,10 @@ _e_tz_screenmirror_dump_still(E_Mirror_Buffer *buffer)
         tdm_layer *layer;
         tbm_surface_h surface = NULL;
         E_Devmgr_Buf *tmp = NULL;
-        Eina_Rectangle dst_pos;
-        Eina_Rectangle showing_pos;
-        Eina_Rectangle dst_crop;
-        Eina_Rectangle src_crop;
+        Eina_Rectangle dst_pos = {0, };
+        Eina_Rectangle showing_pos = {0, };
+        Eina_Rectangle src_crop = {0, };
+        Eina_Rectangle dst_crop = {0, };
 
         layer = tdm_output_get_layer(mirror->tdm_output, i, &err);
         EINA_SAFETY_ON_FALSE_RETURN(err == TDM_ERROR_NONE);
