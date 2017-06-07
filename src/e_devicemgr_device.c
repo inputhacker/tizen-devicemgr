@@ -719,9 +719,8 @@ _e_input_devmgr_cb_unblock_events(struct wl_client *client, struct wl_resource *
 
 typedef struct _keycode_map{
     xkb_keysym_t keysym;
-    xkb_keycode_t *keycodes;
-    int nkeycodes;
-}keycode_map;
+    xkb_keycode_t keycode;
+} keycode_map;
 
 static void
 find_keycode(struct xkb_keymap *keymap, xkb_keycode_t key, void *data)
@@ -730,44 +729,34 @@ find_keycode(struct xkb_keymap *keymap, xkb_keycode_t key, void *data)
    xkb_keysym_t keysym = found_keycodes->keysym;
    int nsyms = 0;
    const xkb_keysym_t *syms_out = NULL;
-   xkb_keycode_t * tmp_keycodes;
+
+   if (found_keycodes->keycode) return;
 
    nsyms = xkb_keymap_key_get_syms_by_level(keymap, key, 0, 0, &syms_out);
    if (nsyms && syms_out)
      {
         if (*syms_out == keysym)
           {
-             tmp_keycodes = calloc(sizeof(xkb_keycode_t), found_keycodes->nkeycodes + 1);
-             if (tmp_keycodes)
-               {
-                  memcpy(tmp_keycodes, found_keycodes->keycodes, found_keycodes->nkeycodes);
-                  free(found_keycodes->keycodes);
-                  found_keycodes->nkeycodes++;
-                  tmp_keycodes[found_keycodes->nkeycodes-1] = key;
-                  found_keycodes->keycodes = tmp_keycodes;
-               }
+             found_keycodes->keycode = key;
           }
      }
 }
 
-int
-_e_input_devmgr_keycode_from_keysym(struct xkb_keymap *keymap, xkb_keysym_t keysym, xkb_keycode_t **keycodes)
+void
+_e_input_devmgr_keycode_from_keysym(struct xkb_keymap *keymap, xkb_keysym_t keysym, xkb_keycode_t *keycode)
 {
     keycode_map found_keycodes = {0,};
     found_keycodes.keysym = keysym;
     xkb_keymap_key_for_each(keymap, find_keycode, &found_keycodes);
 
-    *keycodes = found_keycodes.keycodes;
-    return found_keycodes.nkeycodes;
+    *keycode = found_keycodes.keycode;
 }
 
 static int
 _e_input_devmgr_keycode_from_string(const char *keyname)
 {
    xkb_keysym_t keysym = 0x0;
-   int nkeycodes=0;
-   xkb_keycode_t *keycodes = NULL;
-   int keycode = 0;
+   xkb_keycode_t keycode = 0;
 
    if (!strncmp(keyname, "Keycode-", sizeof("Keycode-")-1))
      {
@@ -776,14 +765,7 @@ _e_input_devmgr_keycode_from_string(const char *keyname)
    else
      {
         keysym = xkb_keysym_from_name(keyname, XKB_KEYSYM_NO_FLAGS);
-        nkeycodes = _e_input_devmgr_keycode_from_keysym(e_comp_wl->xkb.keymap, keysym, &keycodes);
-        if (nkeycodes > 0)
-          {
-             keycode = keycodes[0];
-          }
-
-        free(keycodes);
-        keycodes = NULL;
+        _e_input_devmgr_keycode_from_keysym(e_comp_wl->xkb.keymap, keysym, &keycode);
      }
 
    return keycode;
