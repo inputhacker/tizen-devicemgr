@@ -2480,6 +2480,7 @@ e_devicemgr_video_init(void)
 {
    if (!e_comp_wl) return 0;
    if (!e_comp_wl->wl.disp) return 0;
+   if (e_comp->wl_comp_data->video.global) return 1;
 
    e_info_server_hook_set("mbuf", _e_devicemgr_mbuf_print, NULL);
    e_info_server_hook_set("video-dst-change", _e_devicemgr_video_dst_change, NULL);
@@ -2492,10 +2493,11 @@ e_devicemgr_video_init(void)
         return 0;
      }
 
+   e_comp->wl_comp_data->video.global =
+     wl_global_create(e_comp_wl->wl.disp, &tizen_video_interface, 1, NULL, _e_devicemgr_video_cb_bind);
 
    /* try to add tizen_video to wayland globals */
-   if (!wl_global_create(e_comp_wl->wl.disp, &tizen_video_interface, 1,
-                         NULL, _e_devicemgr_video_cb_bind))
+   if (!e_comp->wl_comp_data->video.global)
      {
         ERR("Could not add tizen_video to wayland globals");
         return 0;
