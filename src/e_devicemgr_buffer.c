@@ -211,6 +211,9 @@ _e_devmgr_buffer_create_res(struct wl_resource *resource, const char *func)
         mbuf->width = wl_shm_buffer_get_width(shm_buffer);
         mbuf->height = wl_shm_buffer_get_height(shm_buffer);
         mbuf->pitches[0] = wl_shm_buffer_get_stride(shm_buffer);
+
+        mbuf->width_from_pitch = mbuf->width;
+        mbuf->height_from_size = mbuf->height;;
      }
    else if ((tbm_surface = wayland_tbm_server_get_surface(e_comp->wl_comp_data->tbm.server, resource)))
      {
@@ -243,14 +246,14 @@ _e_devmgr_buffer_create_res(struct wl_resource *resource, const char *func)
              mbuf->pitches[i] = pitch;
              mbuf->offsets[i] = offset;
           }
+
+        tdm_helper_get_buffer_full_size(tbm_surface, &mbuf->width_from_pitch, &mbuf->height_from_size);
      }
    else
      {
         ERR("unknown buffer resource");
         goto create_fail;
      }
-
-   tdm_helper_get_buffer_full_size(tbm_surface, &mbuf->width_from_pitch, &mbuf->height_from_size);
 
    mbuf_lists = eina_list_append(mbuf_lists, mbuf);
 
