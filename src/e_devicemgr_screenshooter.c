@@ -678,6 +678,7 @@ _e_tz_screenmirror_dump_still(E_Mirror_Buffer *buffer)
    for (i = 0; i < count; i++)
      {
         tdm_layer *layer;
+        tdm_layer_capability capability;
         tbm_surface_h surface = NULL;
         E_Devmgr_Buf *tmp = NULL;
         Eina_Rectangle dst_pos = {0, };
@@ -690,6 +691,11 @@ _e_tz_screenmirror_dump_still(E_Mirror_Buffer *buffer)
 
         if (layer != mirror->tdm_primary_layer)
           {
+             err = tdm_layer_get_capabilities(layer, &capability);
+             EINA_SAFETY_ON_FALSE_RETURN(err == TDM_ERROR_NONE);
+             if (capability & TDM_LAYER_CAPABILITY_VIDEO)
+               continue;
+
              surface = tdm_layer_get_displaying_buffer(layer, &err);
              if (surface == NULL)
                continue;
@@ -1367,7 +1373,7 @@ _e_tz_screenmirror_create(struct wl_client *client, struct wl_resource *shooter_
         layer = tdm_output_get_layer(mirror->tdm_output, i, &err);
         EINA_SAFETY_ON_FALSE_GOTO(err == TDM_ERROR_NONE, fail_create);
 
-        err = tdm_layer_get_capabilities (layer, &capability);
+        err = tdm_layer_get_capabilities(layer, &capability);
         EINA_SAFETY_ON_FALSE_GOTO(err == TDM_ERROR_NONE, fail_create);
 
         if (capability & TDM_LAYER_CAPABILITY_PRIMARY)
