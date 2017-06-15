@@ -960,7 +960,6 @@ static int
 _get_parent_transform(E_Viewport *viewport)
 {
    E_Client *epc = viewport->epc;
-   E_Comp_Wl_Buffer_Viewport *vpp;
    E_Client *topmost;
    unsigned int ptran, pflip;
    int ptransform;
@@ -968,8 +967,7 @@ _get_parent_transform(E_Viewport *viewport)
    if (!epc->comp_data || e_object_is_del(E_OBJECT(epc)))
      return 0;
 
-   vpp = &epc->comp_data->scaler.buffer_viewport;
-   ptransform = vpp->buffer.transform;
+   ptransform = e_comp_wl_output_buffer_transform_get(epc);
 
    topmost = _topmost_parent_get(epc);
 
@@ -991,11 +989,8 @@ static Eina_Bool
 _destination_mode_calculate_destination(E_Viewport *viewport, Eina_Rectangle *prect, Eina_Rectangle *rect)
 {
    E_Client *ec = viewport->ec;
-   E_Comp_Wl_Buffer_Viewport *vp;
-   int sw = 0, sh = 0;
+   int sw = 0, sh = 0, transform;
    double rh = -1.0, rv = -1.0;
-
-   vp = &ec->comp_data->scaler.buffer_viewport;
 
    if (viewport->source.w != -1)
      {
@@ -1005,7 +1000,9 @@ _destination_mode_calculate_destination(E_Viewport *viewport, Eina_Rectangle *pr
    else
      e_devmgr_buffer_size_get(ec, &sw, &sh);
 
-   if (vp->buffer.transform % 2)
+   transform = e_comp_wl_output_buffer_transform_get(ec);
+
+   if (transform % 2)
       SWAP(sw, sh);
 
    PDB("parent(%dx%d) src(%dx%d)", prect->w, prect->h, sw, sh);
@@ -1013,7 +1010,7 @@ _destination_mode_calculate_destination(E_Viewport *viewport, Eina_Rectangle *pr
    /* ratio -> type -> scale -> offset -> align */
    if (viewport->destination.mode.ratio_h != -1.0)
      {
-        if (vp->buffer.transform % 2)
+        if (transform % 2)
           {
              rh = viewport->destination.mode.ratio_v;
              rv = viewport->destination.mode.ratio_h;
@@ -1058,7 +1055,7 @@ _destination_mode_calculate_destination(E_Viewport *viewport, Eina_Rectangle *pr
         double h = viewport->destination.mode.scale_h;
         double v = viewport->destination.mode.scale_v;
 
-        if (vp->buffer.transform % 2)
+        if (transform % 2)
           SWAP(h, v);
 
         new_w = rect->w * h;
@@ -1082,16 +1079,16 @@ _destination_mode_calculate_destination(E_Viewport *viewport, Eina_Rectangle *pr
 
         if (epc)
           {
-             E_Comp_Wl_Buffer_Viewport *vpp;
+             int ptransform;
 
              if (!epc->comp_data || e_object_is_del(E_OBJECT(epc)))
                return EINA_FALSE;
 
-             vpp = &epc->comp_data->scaler.buffer_viewport;
+             ptransform = e_comp_wl_output_buffer_transform_get(epc);
 
-             PDB("parent's transform(%d)", vpp->buffer.transform);
+             PDB("parent's transform(%d)", ptransform);
 
-             switch (vpp->buffer.transform)
+             switch (ptransform)
                {
                 default:
                 case WL_OUTPUT_TRANSFORM_NORMAL:
@@ -1145,7 +1142,7 @@ _destination_mode_calculate_destination(E_Viewport *viewport, Eina_Rectangle *pr
         int w = viewport->destination.mode.offset_w;
         int h = viewport->destination.mode.offset_h;
 
-        if (vp->buffer.transform % 2)
+        if (transform % 2)
           {
              SWAP(x, y);
              SWAP(w, h);
@@ -1276,7 +1273,9 @@ _e_devicemgr_viewport_crop_by_parent(E_Viewport *viewport, Eina_Rectangle *paren
    viewport->cropped_source.w = viewport->cropped_source.w * rw;
    viewport->cropped_source.h = viewport->cropped_source.h * rh;
 
-   _source_transform_to_surface(bw, bh, vp->buffer.transform, 1, &viewport->cropped_source, &viewport->cropped_source);
+   _source_transform_to_surface(bw, bh,
+                                e_comp_wl_output_buffer_transform_get(viewport->ec), 1,
+                                &viewport->cropped_source, &viewport->cropped_source);
 
    vp->buffer.src_x = wl_fixed_from_int(viewport->cropped_source.x);
    vp->buffer.src_y = wl_fixed_from_int(viewport->cropped_source.y);
@@ -1467,7 +1466,9 @@ _e_devicemgr_viewport_apply_source(E_Viewport *viewport)
         return EINA_FALSE;
      }
 
-   _source_transform_to_surface(bw, bh, vp->buffer.transform, 1, &rect, &rect);
+   _source_transform_to_surface(bw, bh,
+                                e_comp_wl_output_buffer_transform_get(ec), 1,
+                                &rect, &rect);
 
    fx = wl_fixed_from_int(rect.x);
    fy = wl_fixed_from_int(rect.y);

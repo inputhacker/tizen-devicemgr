@@ -1222,7 +1222,7 @@ e_devmgr_buffer_transform_scale_size_get(E_Client *ec, int *bw, int *bh)
 {
    E_Comp_Wl_Buffer *buffer = e_pixmap_resource_get(ec->pixmap);
    E_Comp_Wl_Buffer_Viewport *vp = &ec->comp_data->scaler.buffer_viewport;
-   int w, h;
+   int w, h, transform;
 
    *bw = *bh = 0;
 
@@ -1247,7 +1247,9 @@ e_devmgr_buffer_transform_scale_size_get(E_Client *ec, int *bw, int *bh)
         h = buffer->h;
      }
 
-   switch (vp->buffer.transform)
+   transform = e_comp_wl_output_buffer_transform_get(ec);
+
+   switch (transform)
      {
       case WL_OUTPUT_TRANSFORM_90:
       case WL_OUTPUT_TRANSFORM_270:
