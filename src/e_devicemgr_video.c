@@ -14,10 +14,10 @@ static Eina_Bool video_punch;
 #define BUFFER_MAX_COUNT   5
 #define MIN_WIDTH   32
 
-#define VER(fmt,arg...)   ERR("window(0x%08"PRIxPTR"): "fmt, video->window, ##arg)
-#define VWR(fmt,arg...)   WRN("window(0x%08"PRIxPTR"): "fmt, video->window, ##arg)
-#define VIN(fmt,arg...)   INF("window(0x%08"PRIxPTR"): "fmt, video->window, ##arg)
-#define VDB(fmt,arg...)   DBG("window(0x%08"PRIxPTR"): "fmt, video->window, ##arg)
+#define VER(fmt,arg...)   ERR("window(0x%08"PRIxPTR") ec(%p): "fmt, video->window, video->ec, ##arg)
+#define VWR(fmt,arg...)   WRN("window(0x%08"PRIxPTR") ec(%p): "fmt, video->window, video->ec, ##arg)
+#define VIN(fmt,arg...)   INF("window(0x%08"PRIxPTR") ec(%p): "fmt, video->window, video->ec, ##arg)
+#define VDB(fmt,arg...)   DBG("window(0x%08"PRIxPTR") ec(%p): "fmt, video->window, video->ec, ##arg)
 
 #define DET(...)          EINA_LOG_DOM_DBG(_video_detail_log_dom, __VA_ARGS__)
 #define VDT(fmt,arg...)   DET("window(0x%08"PRIxPTR"): "fmt, video->window, ##arg)
