@@ -51,10 +51,10 @@ struct _E_Video
         Eina_Rectangle input_r;  /* input buffer's content rect */
         Eina_Rectangle output_r; /* video plane rect */
         uint transform;          /* rotate, flip */
-     } geo, old_geo;
 
-   Eina_Rectangle tdm_output_r; /* video plane rect in physical output coordinates */
-   uint tdm_transform;          /* rotate, flip in physical output coordinates */
+        Eina_Rectangle tdm_output_r; /* video plane rect in physical output coordinates */
+        uint tdm_transform;          /* rotate, flip in physical output coordinates */
+     } geo, old_geo;
 
    E_Comp_Wl_Buffer *old_comp_buffer;
 
@@ -643,61 +643,61 @@ _e_video_geometry_cal_physical(E_Video *video)
    switch(transform)
    {
    case WL_OUTPUT_TRANSFORM_90:
-     video->tdm_transform = TDM_TRANSFORM_270;
+     video->geo.tdm_transform = TDM_TRANSFORM_270;
      break;
    case WL_OUTPUT_TRANSFORM_180:
-     video->tdm_transform = TDM_TRANSFORM_180;
+     video->geo.tdm_transform = TDM_TRANSFORM_180;
      break;
    case WL_OUTPUT_TRANSFORM_270:
-     video->tdm_transform = TDM_TRANSFORM_90;
+     video->geo.tdm_transform = TDM_TRANSFORM_90;
      break;
    case WL_OUTPUT_TRANSFORM_FLIPPED:
-     video->tdm_transform = TDM_TRANSFORM_FLIPPED;
+     video->geo.tdm_transform = TDM_TRANSFORM_FLIPPED;
      break;
    case WL_OUTPUT_TRANSFORM_FLIPPED_90:
-     video->tdm_transform = TDM_TRANSFORM_FLIPPED_270;
+     video->geo.tdm_transform = TDM_TRANSFORM_FLIPPED_270;
      break;
    case WL_OUTPUT_TRANSFORM_FLIPPED_180:
-     video->tdm_transform = TDM_TRANSFORM_FLIPPED_180;
+     video->geo.tdm_transform = TDM_TRANSFORM_FLIPPED_180;
      break;
    case WL_OUTPUT_TRANSFORM_FLIPPED_270:
-     video->tdm_transform = TDM_TRANSFORM_FLIPPED_90;
+     video->geo.tdm_transform = TDM_TRANSFORM_FLIPPED_90;
      break;
    case WL_OUTPUT_TRANSFORM_NORMAL:
    default:
-     video->tdm_transform = TDM_TRANSFORM_NORMAL;
+     video->geo.tdm_transform = TDM_TRANSFORM_NORMAL;
      break;
    }
 
    if (output->transform % 2)
      {
-        if (video->tdm_transform == TDM_TRANSFORM_FLIPPED)
-          video->tdm_transform = TDM_TRANSFORM_FLIPPED_180;
-        else if (video->tdm_transform == TDM_TRANSFORM_FLIPPED_90)
-          video->tdm_transform = TDM_TRANSFORM_FLIPPED_270;
-        else if (video->tdm_transform == TDM_TRANSFORM_FLIPPED_180)
-          video->tdm_transform = TDM_TRANSFORM_FLIPPED;
-        else if (video->tdm_transform == TDM_TRANSFORM_FLIPPED_270)
-          video->tdm_transform = TDM_TRANSFORM_FLIPPED_90;
+        if (video->geo.tdm_transform == TDM_TRANSFORM_FLIPPED)
+          video->geo.tdm_transform = TDM_TRANSFORM_FLIPPED_180;
+        else if (video->geo.tdm_transform == TDM_TRANSFORM_FLIPPED_90)
+          video->geo.tdm_transform = TDM_TRANSFORM_FLIPPED_270;
+        else if (video->geo.tdm_transform == TDM_TRANSFORM_FLIPPED_180)
+          video->geo.tdm_transform = TDM_TRANSFORM_FLIPPED;
+        else if (video->geo.tdm_transform == TDM_TRANSFORM_FLIPPED_270)
+          video->geo.tdm_transform = TDM_TRANSFORM_FLIPPED_90;
      }
 
    if (output->transform == 0)
-     video->tdm_output_r = video->geo.output_r;
+     video->geo.tdm_output_r = video->geo.output_r;
    else
      e_comp_wl_rect_convert(zone->w, zone->h, output->transform, 1,
                             video->geo.output_r.x, video->geo.output_r.y,
                             video->geo.output_r.w, video->geo.output_r.h,
-                            &video->tdm_output_r.x, &video->tdm_output_r.y,
-                            &video->tdm_output_r.w, &video->tdm_output_r.h);
+                            &video->geo.tdm_output_r.x, &video->geo.tdm_output_r.y,
+                            &video->geo.tdm_output_r.w, &video->geo.tdm_output_r.h);
 
    VDB("geomtry: screen(%d,%d %dx%d | %d) => %d => physical(%d,%d %dx%d | %d)",
        EINA_RECTANGLE_ARGS(&video->geo.output_r), video->geo.transform, transform,
-       EINA_RECTANGLE_ARGS(&video->tdm_output_r), video->tdm_transform);
+       EINA_RECTANGLE_ARGS(&video->geo.tdm_output_r), video->geo.tdm_transform);
 
    return;
 normal:
-   video->tdm_output_r = video->geo.output_r;
-   video->tdm_transform = video->geo.transform;
+   video->geo.tdm_output_r = video->geo.output_r;
+   video->geo.tdm_transform = video->geo.transform;
 }
 
 static Eina_Bool
@@ -1216,10 +1216,10 @@ _e_video_frame_buffer_show(E_Video *video, E_Devmgr_Buf *mbuf)
    info.src_config.pos.y = mbuf->content_r.y;
    info.src_config.pos.w = mbuf->content_r.w;
    info.src_config.pos.h = mbuf->content_r.h;
-   info.dst_pos.x = video->tdm_output_r.x;
-   info.dst_pos.y = video->tdm_output_r.y;
-   info.dst_pos.w = video->tdm_output_r.w;
-   info.dst_pos.h = video->tdm_output_r.h;
+   info.dst_pos.x = video->geo.tdm_output_r.x;
+   info.dst_pos.y = video->geo.tdm_output_r.y;
+   info.dst_pos.w = video->geo.tdm_output_r.w;
+   info.dst_pos.h = video->geo.tdm_output_r.h;
    info.transform = mbuf->content_t;
 
    if (memcmp(&old_info, &info, sizeof(tdm_info_layer)))
@@ -1861,7 +1861,7 @@ _e_video_render(E_Video *video, const char *func)
         input_buffer = _e_video_input_buffer_get(video, comp_buffer, EINA_TRUE);
         EINA_SAFETY_ON_NULL_GOTO(input_buffer, render_fail);
 
-        _e_video_buffer_show(video, input_buffer, video->tdm_transform);
+        _e_video_buffer_show(video, input_buffer, video->geo.tdm_transform);
 
         video->old_geo = video->geo;
         video->old_comp_buffer = comp_buffer;
@@ -1883,20 +1883,20 @@ _e_video_render(E_Video *video, const char *func)
                                           &video->pp_maxw, &video->pp_maxh, &video->pp_align);
      }
 
-   if ((video->pp_minw > 0 && (video->geo.input_r.w < video->pp_minw || video->geo.output_r.w < video->pp_minw)) ||
-       (video->pp_minh > 0 && (video->geo.input_r.h < video->pp_minh || video->geo.output_r.h < video->pp_minh)) ||
-       (video->pp_maxw > 0 && (video->geo.input_r.w > video->pp_maxw || video->geo.output_r.w > video->pp_maxw)) ||
-       (video->pp_maxh > 0 && (video->geo.input_r.h > video->pp_maxh || video->geo.output_r.h > video->pp_maxh)))
+   if ((video->pp_minw > 0 && (video->geo.input_r.w < video->pp_minw || video->geo.tdm_output_r.w < video->pp_minw)) ||
+       (video->pp_minh > 0 && (video->geo.input_r.h < video->pp_minh || video->geo.tdm_output_r.h < video->pp_minh)) ||
+       (video->pp_maxw > 0 && (video->geo.input_r.w > video->pp_maxw || video->geo.tdm_output_r.w > video->pp_maxw)) ||
+       (video->pp_maxh > 0 && (video->geo.input_r.h > video->pp_maxh || video->geo.tdm_output_r.h > video->pp_maxh)))
      {
         INF("size(%dx%d, %dx%d) is out of PP range",
-            video->geo.input_r.w, video->geo.input_r.h, video->geo.output_r.w, video->geo.output_r.h);
+            video->geo.input_r.w, video->geo.input_r.h, video->geo.tdm_output_r.w, video->geo.tdm_output_r.h);
         goto done;
      }
 
    input_buffer = _e_video_input_buffer_get(video, comp_buffer, EINA_FALSE);
    EINA_SAFETY_ON_NULL_GOTO(input_buffer, render_fail);
 
-   pp_buffer = _e_video_pp_buffer_get(video, video->tdm_output_r.w, video->tdm_output_r.h);
+   pp_buffer = _e_video_pp_buffer_get(video, video->geo.tdm_output_r.w, video->geo.tdm_output_r.h);
    EINA_SAFETY_ON_NULL_GOTO(pp_buffer, render_fail);
 
    if (memcmp(&video->old_geo, &video->geo, sizeof video->geo))
@@ -1913,10 +1913,10 @@ _e_video_render(E_Video *video, const char *func)
         info.src_config.format = video->tbmfmt;
         info.dst_config.size.h = pp_buffer->width_from_pitch;
         info.dst_config.size.v = pp_buffer->height_from_size;
-        info.dst_config.pos.w = video->tdm_output_r.w;
-        info.dst_config.pos.h = video->tdm_output_r.h;
+        info.dst_config.pos.w = video->geo.tdm_output_r.w;
+        info.dst_config.pos.h = video->geo.tdm_output_r.h;
         info.dst_config.format = video->pp_tbmfmt;
-        info.transform = video->tdm_transform;
+        info.transform = video->geo.tdm_transform;
 
         if (tdm_pp_set_info(video->pp, &info))
           goto render_fail;
