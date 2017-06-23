@@ -972,7 +972,8 @@ _get_parent_transform(E_Viewport *viewport)
    ptransform = vpp->buffer.transform;
 
    topmost = _topmost_parent_get(epc);
-   if (epc == topmost)
+
+   if (ptransform != 0 && epc == topmost)
      {
         E_Comp_Wl_Output *output = e_comp_wl_output_find(topmost);
 
