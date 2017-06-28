@@ -2152,7 +2152,7 @@ _e_devicemgr_video_object_cb_set_attribute(struct wl_client *client,
          return;
       }
 
-   if (!video->layer && video->allowed_attribute)
+   if (!video->layer)
      {
         VIN("set layer: set_attribute");
         if (!_e_video_set_layer(video, EINA_TRUE))
