@@ -7,22 +7,13 @@ pkgdir                 = $(libdir)/enlightenment/modules/$(MODULE)/$(MODULE_ARCH
 pkg_LTLIBRARIES        = module.la
 module_la_SOURCES      = \
 	e_mod_main.c \
-	e_devicemgr_output.c \
 	e_devicemgr_input.c \
-	e_devicemgr_scale.c \
 	e_devicemgr_conf.c
 
 if HAVE_WAYLAND_ONLY
 module_la_SOURCES      += \
-	e_devicemgr_dpms.c \
-	e_devicemgr_screenshooter.c \
-	e_devicemgr_video.c \
-	e_devicemgr_viewport.c \
-	e_devicemgr_tdm.c \
-	e_devicemgr_buffer.c \
 	e_devicemgr_embedded_compositor.c \
-	e_devicemgr_device.c \
-	e_devicemgr_eom.c
+	e_devicemgr_device.c
 endif
 
 module_la_LIBADD       =

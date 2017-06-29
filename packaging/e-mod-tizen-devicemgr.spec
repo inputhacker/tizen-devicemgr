@@ -9,17 +9,11 @@ License: BSD-2-Clause
 BuildRequires: pkgconfig(enlightenment)
 BuildRequires: pkgconfig(dlog)
 BuildRequires: pkgconfig(ttrace)
-BuildRequires: pkgconfig(libtbm)
-BuildRequires: pkgconfig(libtdm)
-BuildRequires: pkgconfig(libpng)
-BuildRequires: pkgconfig(pixman-1)
 BuildRequires: pkgconfig(wayland-server)
-BuildRequires: pkgconfig(screenshooter-server)
 BuildRequires: pkgconfig(tizen-extension-server)
-BuildRequires: pkgconfig(wayland-tbm-server)
 BuildRequires: pkgconfig(cynara-client)
 BuildRequires: pkgconfig(cynara-creds-socket)
-BuildRequires: pkgconfig(eom-server)
+
 
 %global TZ_SYS_RO_SHARE  %{?TZ_SYS_RO_SHARE:%TZ_SYS_RO_SHARE}%{!?TZ_SYS_RO_SHARE:/usr/share}
 

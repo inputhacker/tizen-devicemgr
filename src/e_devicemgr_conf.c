@@ -21,7 +21,6 @@ e_devicemgr_conf_init(E_Devicemgr_Config_Data *dconfig)
 #define D dconfig->conf_edd
    E_CONFIG_VAL(D, T, input.button_remap_enable, CHAR);
    E_CONFIG_VAL(D, T, input.back_keycode, INT);
-   E_CONFIG_VAL(D, T, eom_enable, CHAR);
 
 #undef T
 #undef D
