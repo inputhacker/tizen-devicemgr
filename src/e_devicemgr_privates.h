@@ -55,7 +55,6 @@ struct _E_Devicemgr_Conf_Edd
       Eina_Bool button_remap_enable;
       int back_keycode;
    } input;
-   Eina_Bool eom_enable;
 };
 
 struct _E_Devicemgr_Config_Data
