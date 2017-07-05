@@ -211,6 +211,11 @@ _e_devmgr_buffer_create_res(struct wl_resource *resource, const char *func)
         mbuf->width = wl_shm_buffer_get_width(shm_buffer);
         mbuf->height = wl_shm_buffer_get_height(shm_buffer);
         mbuf->pitches[0] = wl_shm_buffer_get_stride(shm_buffer);
+
+        if (IS_RGB(mbuf->tbmfmt))
+          mbuf->width_from_pitch = mbuf->pitches[0]>>2;
+        else
+          mbuf->width_from_pitch = mbuf->pitches[0];
      }
    else if ((tbm_surface = wayland_tbm_server_get_surface(e_comp->wl_comp_data->tbm.server, resource)))
      {
@@ -243,6 +248,11 @@ _e_devmgr_buffer_create_res(struct wl_resource *resource, const char *func)
              mbuf->pitches[i] = pitch;
              mbuf->offsets[i] = offset;
           }
+
+        if (IS_RGB(mbuf->tbmfmt))
+          mbuf->width_from_pitch = mbuf->pitches[0]>>2;
+        else
+          mbuf->width_from_pitch = mbuf->pitches[0];
      }
    else
      {
@@ -250,13 +260,10 @@ _e_devmgr_buffer_create_res(struct wl_resource *resource, const char *func)
         goto create_fail;
      }
 
-   tdm_helper_get_buffer_full_size(tbm_surface, &mbuf->width_from_pitch, &mbuf->height_from_size);
-
    mbuf_lists = eina_list_append(mbuf_lists, mbuf);
 
-   BDB("type(%d) %dx%d(%dx%d), %c%c%c%c, name(%d,%d,%d) hnd(%d,%d,%d), pitch(%d,%d,%d), offset(%d,%d,%d): %s",
-       mbuf->type, mbuf->width_from_pitch, mbuf->height_from_size,
-       mbuf->width, mbuf->height, FOURCC_STR(mbuf->tbmfmt),
+   BDB("type(%d) %dx%d, %c%c%c%c, name(%d,%d,%d) hnd(%d,%d,%d), pitch(%d,%d,%d), offset(%d,%d,%d): %s",
+       mbuf->type, mbuf->width, mbuf->height, FOURCC_STR(mbuf->tbmfmt),
        mbuf->names[0], mbuf->names[1], mbuf->names[2],
        mbuf->handles[0], mbuf->handles[1], mbuf->handles[2],
        mbuf->pitches[0], mbuf->pitches[1], mbuf->pitches[2],
@@ -346,13 +353,15 @@ _e_devmgr_buffer_create_tbm(tbm_surface_h tbm_surface, const char *func)
         mbuf->offsets[i] = offset;
      }
 
-   tdm_helper_get_buffer_full_size(tbm_surface, &mbuf->width_from_pitch, &mbuf->height_from_size);
+   if (IS_RGB(mbuf->tbmfmt))
+     mbuf->width_from_pitch = mbuf->pitches[0]>>2;
+   else
+     mbuf->width_from_pitch = mbuf->pitches[0];
 
    mbuf_lists = eina_list_append(mbuf_lists, mbuf);
 
-   BDB("type(%d) %dx%d(%dx%d), %c%c%c%c, name(%d,%d,%d) hnd(%d,%d,%d), pitch(%d,%d,%d), offset(%d,%d,%d): %s",
-       mbuf->type, mbuf->width_from_pitch, mbuf->height_from_size,
-       mbuf->width, mbuf->height, FOURCC_STR(mbuf->tbmfmt),
+   BDB("type(%d) %dx%d, %c%c%c%c, name(%d,%d,%d) hnd(%d,%d,%d), pitch(%d,%d,%d), offset(%d,%d,%d): %s",
+       mbuf->type, mbuf->width, mbuf->height, FOURCC_STR(mbuf->tbmfmt),
        mbuf->names[0], mbuf->names[1], mbuf->names[2],
        mbuf->handles[0], mbuf->handles[1], mbuf->handles[2],
        mbuf->pitches[0], mbuf->pitches[1], mbuf->pitches[2],
@@ -490,15 +499,17 @@ _e_devmgr_buffer_alloc(int width, int height, tbm_format tbmfmt, Eina_Bool scano
         mbuf->offsets[i] = offset;
      }
 
-   tdm_helper_get_buffer_full_size(tbm_surface, &mbuf->width_from_pitch, &mbuf->height_from_size);
+   if (IS_RGB(mbuf->tbmfmt))
+     mbuf->width_from_pitch = mbuf->pitches[0]>>2;
+   else
+     mbuf->width_from_pitch = mbuf->pitches[0];
 
    tbm_surface_internal_unref(tbm_surface);
 
    mbuf_lists = eina_list_append(mbuf_lists, mbuf);
 
-   BDB("type(%d) %dx%d(%dx%d) %c%c%c%c nm(%d,%d,%d) hnd(%d,%d,%d) pitch(%d,%d,%d) offset(%d,%d,%d): %s",
-       mbuf->type, mbuf->width_from_pitch, mbuf->height_from_size,
-       mbuf->width, mbuf->height, FOURCC_STR(mbuf->tbmfmt),
+   BDB("type(%d) %dx%d %c%c%c%c nm(%d,%d,%d) hnd(%d,%d,%d) pitch(%d,%d,%d) offset(%d,%d,%d): %s",
+       mbuf->type, mbuf->width, mbuf->height, FOURCC_STR(mbuf->tbmfmt),
        mbuf->names[0], mbuf->names[1], mbuf->names[2],
        mbuf->handles[0], mbuf->handles[1], mbuf->handles[2],
        mbuf->pitches[0], mbuf->pitches[1], mbuf->pitches[2],

@@ -1288,7 +1288,7 @@ _e_video_frame_buffer_show(E_Video *video, E_Devmgr_Buf *mbuf)
 
    CLEAR(info);
    info.src_config.size.h = mbuf->width_from_pitch;
-   info.src_config.size.v = mbuf->height_from_size;
+   info.src_config.size.v = mbuf->height;
    info.src_config.pos.x = mbuf->content_r.x;
    info.src_config.pos.y = mbuf->content_r.y;
    info.src_config.pos.w = mbuf->content_r.w;
@@ -1987,15 +1987,15 @@ _e_video_render(E_Video *video, const char *func)
         tdm_info_pp info;
 
         CLEAR(info);
-        info.src_config.size.h = input_buffer->width_from_pitch;
-        info.src_config.size.v = input_buffer->height_from_size;
+        info.src_config.size.h = video->geo.input_w;
+        info.src_config.size.v = video->geo.input_h;
         info.src_config.pos.x = video->geo.input_r.x;
         info.src_config.pos.y = video->geo.input_r.y;
         info.src_config.pos.w = video->geo.input_r.w;
         info.src_config.pos.h = video->geo.input_r.h;
         info.src_config.format = video->tbmfmt;
         info.dst_config.size.h = pp_buffer->width_from_pitch;
-        info.dst_config.size.v = pp_buffer->height_from_size;
+        info.dst_config.size.v = pp_buffer->height;
         info.dst_config.pos.w = video->geo.tdm_output_r.w;
         info.dst_config.pos.h = video->geo.tdm_output_r.h;
         info.dst_config.format = video->pp_tbmfmt;
