@@ -113,6 +113,8 @@ void e_devicemgr_device_fini(void);
 
 Eina_Bool e_devicemgr_block_check_keyboard(int type, void *event);
 Eina_Bool e_devicemgr_block_check_pointer(int type, void *event);
+Eina_Bool e_devicemgr_is_detent_device(const char *name);
+Eina_Bool e_devicemgr_check_detent_device_add(int type, void *event);
 Eina_Bool e_devicemgr_detent_check(int type EINA_UNUSED, void *event);
 
 #endif

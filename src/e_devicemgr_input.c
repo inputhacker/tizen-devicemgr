@@ -79,7 +79,15 @@ _e_devicemgr_input_keyboard_process(int type, void *event)
 static Eina_Bool
 _e_devicemgr_event_filter(void *data, void *loop_data EINA_UNUSED, int type, void *event)
 {
+   Eina_Bool res = ECORE_CALLBACK_PASS_ON;
+
    (void) data;
+
+   if (ECORE_EVENT_MOUSE_MOVE == type || ECORE_EVENT_MOUSE_WHEEL == type)
+     res = e_devicemgr_detent_check(type, event);
+
+   if (res != ECORE_CALLBACK_PASS_ON)
+     return ECORE_CALLBACK_DONE;
 
    if (ECORE_EVENT_KEY_DOWN == type || ECORE_EVENT_KEY_UP == type)
      {
@@ -91,9 +99,13 @@ _e_devicemgr_event_filter(void *data, void *loop_data EINA_UNUSED, int type, voi
      {
         return _e_devicemgr_input_pointer_process(type, event);
      }
-   else if (ECORE_EVENT_MOUSE_WHEEL == type)
+   else if (ECORE_EVENT_DEVICE_ADD == type)
      {
-        return e_devicemgr_detent_check(type, event);
+        return e_devicemgr_check_detent_device_add(type, event);
+     }
+   else if (ECORE_DRM_EVENT_INPUT_DEVICE_ADD == type)
+     {
+        return e_devicemgr_check_detent_device_add(type, event);
      }
 
    return ECORE_CALLBACK_PASS_ON;

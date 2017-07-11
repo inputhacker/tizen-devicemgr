@@ -542,24 +542,83 @@ _e_devicemgr_send_detent_event(int detent)
 }
 
 Eina_Bool
-e_devicemgr_detent_check(int type EINA_UNUSED, void *event)
+e_devicemgr_is_detent_device(const char *name)
 {
-   Ecore_Event_Mouse_Wheel *ev;
+   if (!name)
+     return EINA_FALSE;
+
+   if (!strncmp(name, "tizen_detent", 12))
+     return EINA_TRUE;
+
+   return EINA_FALSE;
+}
+
+Eina_Bool
+e_devicemgr_check_detent_device_add(int type, void *event)
+{
+   Ecore_Event_Device_Info *e_device_info = NULL;
+   Ecore_Drm_Event_Input_Device_Add *e_device_add = NULL;
+
+   if (ECORE_EVENT_DEVICE_ADD == type)
+     {
+        e_device_info = (Ecore_Event_Device_Info *)event;
+
+        /* Remove mouse class from tizen detent device */
+        if (e_devicemgr_is_detent_device(e_device_info->name))
+          e_device_info->clas &= ~ECORE_DEVICE_CLASS_MOUSE;
+     }
+   else if (ECORE_DRM_EVENT_INPUT_DEVICE_ADD == type)
+     {
+        e_device_add = (Ecore_Drm_Event_Input_Device_Add *)event;
+
+        /* Remove pointer capability from tizen detent device */
+        if (e_devicemgr_is_detent_device(e_device_add->name))
+          e_device_add->caps &= ~EVDEV_SEAT_POINTER;
+     }
+
+   return ECORE_CALLBACK_PASS_ON;
+}
+
+
+Eina_Bool
+e_devicemgr_detent_check(int type, void *event)
+{
    int detent;
    const char *name;
+   Ecore_Device *dev = NULL;
+   Ecore_Event_Mouse_Wheel *ev = NULL;
 
-   ev = event;
-   EINA_SAFETY_ON_NULL_RETURN_VAL(ev, ECORE_CALLBACK_PASS_ON);
-   if (!ev->dev) return ECORE_CALLBACK_PASS_ON;
+   EINA_SAFETY_ON_NULL_RETURN_VAL(event, ECORE_CALLBACK_PASS_ON);
 
-   name = ecore_device_identifier_get(ev->dev);
-   if (!name) return ECORE_CALLBACK_PASS_ON;
-
-   if ((input_devmgr_data->detent.identifier) &&
-       (!strncmp(name, input_devmgr_data->detent.identifier,
-                 eina_stringshare_strlen(input_devmgr_data->detent.identifier))))
+   if (type == ECORE_EVENT_MOUSE_MOVE)
      {
-        detent = (int)(ev->z / (input_devmgr_data->detent.wheel_click_angle ? input_devmgr_data->detent.wheel_click_angle : 1));
+        Ecore_Event_Mouse_Move *move = NULL;
+        move = (Ecore_Event_Mouse_Move *)event;
+        dev = move->dev;
+     }
+   else /* ECORE_EVENT_MOUSE_WHEEL */
+     {
+        ev = (Ecore_Event_Mouse_Wheel *)event;
+        dev = ev->dev;
+     }
+
+   EINA_SAFETY_ON_NULL_RETURN_VAL(dev, ECORE_CALLBACK_PASS_ON);
+
+   name = ecore_device_name_get(dev);
+   EINA_SAFETY_ON_NULL_RETURN_VAL(name, ECORE_CALLBACK_PASS_ON);
+
+   if (e_devicemgr_is_detent_device(name))
+     {
+        /* Ignore mouse move event from tizen detent device */
+        if (ECORE_EVENT_MOUSE_MOVE == type)
+          return ECORE_CALLBACK_DONE;
+
+        /* Send wheel event from tizen detent device
+                   as an axis event using tizen_input_device interface */
+        detent = (int)(ev->z / (input_devmgr_data->detent.wheel_click_angle
+                                ? input_devmgr_data->detent.wheel_click_angle
+                                : 1));
+
         if (detent == 2 || detent == -2)
           {
              detent = (detent / 2)*(-1);
