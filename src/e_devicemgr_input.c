@@ -5,6 +5,8 @@
 #include "e_devicemgr_device.h"
 
 static Ecore_Event_Filter *ev_filter = NULL;
+static int virtual_key_device_fd = -1;
+static int virtual_mouse_device_fd = -1;
 
 extern E_Devicemgr_Config_Data *dconfig;
 
@@ -111,7 +113,6 @@ _e_devicemgr_event_filter(void *data, void *loop_data EINA_UNUSED, int type, voi
    return ECORE_CALLBACK_PASS_ON;
 }
 
-
 int
 e_devicemgr_input_init(void)
 {
@@ -119,6 +120,26 @@ e_devicemgr_input_init(void)
    ev_filter = ecore_event_filter_add(NULL, _e_devicemgr_event_filter, NULL, NULL);
 
    DMDBG("input.button_remap_enable: %d\n", dconfig->conf->input.button_remap_enable);
+
+   if (dconfig->conf->input.virtual_key_device_enable)
+     {
+        virtual_key_device_fd = e_devicemgr_create_virtual_device(E_DEVICEMGR_DEVICE_TYPE_KEY, "Virtual Key Device");
+
+        if (virtual_key_device_fd >= 0)
+          DMDBG("input.virtual_key_device_enable: 1, device fd : %d\n", virtual_key_device_fd);
+        else
+          DMDBG("input.virtual_key_device_enable: 1, but failed to create device !\n");
+     }
+
+   if (dconfig->conf->input.virtual_mouse_device_enable)
+     {
+        virtual_mouse_device_fd = e_devicemgr_create_virtual_device(E_DEVICEMGR_DEVICE_TYPE_MOUSE, "Virtual Mouse Device");
+
+        if (virtual_mouse_device_fd >= 0)
+          DMDBG("input.virtual_mouse_device_enable: 1, device fd : %d\n", virtual_mouse_device_fd);
+        else
+          DMDBG("input.virtual_mouse_device_enable: 1, but failed to create device !\n");
+     }
 
    return 1;
 }
@@ -128,4 +149,16 @@ e_devicemgr_input_fini(void)
 {
    /* remove existing event filter */
    ecore_event_filter_del(ev_filter);
+
+   if (virtual_key_device_fd)
+     {
+        e_devicemgr_destroy_virtual_device(virtual_key_device_fd);
+        virtual_key_device_fd = -1;
+     }
+
+   if (virtual_mouse_device_fd)
+     {
+        e_devicemgr_destroy_virtual_device(virtual_mouse_device_fd);
+        virtual_mouse_device_fd = -1;
+     }
 }

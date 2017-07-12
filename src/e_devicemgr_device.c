@@ -840,7 +840,7 @@ _e_input_devmgr_inputgen_generator_remove_device(e_devicemgr_inputgen_device_dat
         return;
      }
 
-   close(device->uinp_fd);
+   e_devicemgr_destroy_virtual_device(device->uinp_fd);
    device->uinp_fd = -1;
    eina_stringshare_del(device->identifier);
    device->identifier = NULL;
@@ -1060,9 +1060,9 @@ _e_input_devmgr_inputgen_client_remove(struct wl_client *client, unsigned int cl
 }
 
 static int
-_e_input_devmgr_create_keyboard_device(struct wl_client *client, struct uinput_user_dev *uinp)
+_e_input_devmgr_create_keyboard_device(struct wl_client *client, const char *device_name)
 {
-   int uinp_fd = -1, ret = -1;
+   int uinp_fd = -1;
    Eina_List *l, *l2;
    e_devicemgr_inputgen_client_data *cdata;
    e_devicemgr_inputgen_device_data *ddata, *device = NULL;
@@ -1070,7 +1070,7 @@ _e_input_devmgr_create_keyboard_device(struct wl_client *client, struct uinput_u
 
    EINA_LIST_FOREACH(input_devmgr_data->inputgen.kbd_list, l, ddata)
      {
-        if (!strncmp(ddata->name, uinp->name, UINPUT_MAX_NAME_SIZE))
+        if (!strncmp(ddata->name, device_name, UINPUT_MAX_NAME_SIZE))
           {
              EINA_LIST_FOREACH(ddata->clients, l2, cdata)
                {
@@ -1091,7 +1091,7 @@ _e_input_devmgr_create_keyboard_device(struct wl_client *client, struct uinput_u
      {
         device = E_NEW(e_devicemgr_inputgen_device_data, 1);
         if (!device) return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NO_SYSTEM_RESOURCES;
-        strncpy(device->name, uinp->name, UINPUT_MAX_NAME_SIZE - 1);
+        strncpy(device->name, device_name, UINPUT_MAX_NAME_SIZE - 1);
      }
 
    cdata = NULL;
@@ -1110,31 +1110,10 @@ _e_input_devmgr_create_keyboard_device(struct wl_client *client, struct uinput_u
    if (exist_device_flag)
      return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NONE;
 
-   uinp_fd = open("/dev/uinput", O_WRONLY | O_NDELAY);
-   if ( uinp_fd < 0)
-     {
-        DMWRN("Failed to open /dev/uinput: (%d)\n", uinp_fd);
-        goto fail_create_device;
-     }
+   uinp_fd = e_devicemgr_create_virtual_device(E_DEVICEMGR_DEVICE_TYPE_KEY, device_name);
 
-   ioctl(uinp_fd, UI_SET_EVBIT, EV_KEY);
-   ioctl(uinp_fd, UI_SET_EVBIT, EV_SYN);
-   ioctl(uinp_fd, UI_SET_EVBIT, EV_MSC);
-
-   ioctl(uinp_fd, UI_SET_MSCBIT, MSC_SCAN);
-   ioctl(uinp_fd, UI_SET_KEYBIT, KEY_ESC);
-
-   ret = write(uinp_fd, uinp, sizeof(struct uinput_user_dev));
-   if (ret < 0)
-     {
-        DMWRN("keyboard Failed to write UINPUT device\n");
-        goto fail_create_device;
-     }
-   if (ioctl(uinp_fd, UI_DEV_CREATE))
-     {
-        DMWRN("keyboard Unable to create UINPUT device\n");
-        goto fail_create_device;
-     }
+   if (uinp_fd < 0)
+    goto fail_create_device;
 
    device->uinp_fd = uinp_fd;
    input_devmgr_data->inputgen.kbd_list =
@@ -1143,19 +1122,13 @@ _e_input_devmgr_create_keyboard_device(struct wl_client *client, struct uinput_u
    return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NONE;
 
 fail_create_device:
-   if (uinp_fd >= 0) close(uinp_fd);
-   if (!exist_device_flag && device)
-     {
-        E_FREE(device);
-     }
-   if (cdata) E_FREE(cdata);
    return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NO_SYSTEM_RESOURCES;
 }
 
 static int
-_e_input_devmgr_create_mouse_device(struct wl_client *client, struct uinput_user_dev *uinp)
+_e_input_devmgr_create_mouse_device(struct wl_client *client, const char *device_name)
 {
-   int uinp_fd = -1, ret = -1;
+   int uinp_fd = -1;
    Eina_List *l, *l2;
    e_devicemgr_inputgen_client_data *cdata;
    e_devicemgr_inputgen_device_data *ddata, *device = NULL;
@@ -1163,7 +1136,7 @@ _e_input_devmgr_create_mouse_device(struct wl_client *client, struct uinput_user
 
    EINA_LIST_FOREACH(input_devmgr_data->inputgen.ptr_list, l, ddata)
      {
-        if (!strncmp(ddata->name, uinp->name, UINPUT_MAX_NAME_SIZE))
+        if (!strncmp(ddata->name, device_name, UINPUT_MAX_NAME_SIZE))
           {
              EINA_LIST_FOREACH(ddata->clients, l2, cdata)
                {
@@ -1184,7 +1157,7 @@ _e_input_devmgr_create_mouse_device(struct wl_client *client, struct uinput_user
      {
         device = E_NEW(e_devicemgr_inputgen_device_data, 1);
         if (!device) return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NO_SYSTEM_RESOURCES;
-        strncpy(device->name, uinp->name, UINPUT_MAX_NAME_SIZE - 1);
+        strncpy(device->name, device_name, UINPUT_MAX_NAME_SIZE - 1);
      }
 
    cdata = NULL;
@@ -1203,38 +1176,10 @@ _e_input_devmgr_create_mouse_device(struct wl_client *client, struct uinput_user
    if (exist_device_flag)
      return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NONE;
 
-   uinp_fd = open("/dev/uinput", O_WRONLY | O_NDELAY);
-   if ( uinp_fd < 0)
-     {
-        DMWRN("Failed to open /dev/uinput: (%d)\n", uinp_fd);
-        goto fail_create_device;
-     }
+   uinp_fd = e_devicemgr_create_virtual_device(E_DEVICEMGR_DEVICE_TYPE_MOUSE, device_name);
 
-   ioctl(uinp_fd, UI_SET_EVBIT, EV_KEY);
-   ioctl(uinp_fd, UI_SET_EVBIT, EV_SYN);
-   ioctl(uinp_fd, UI_SET_EVBIT, EV_MSC);
-   ioctl(uinp_fd, UI_SET_EVBIT, EV_REL);
-
-   ioctl(uinp_fd, UI_SET_MSCBIT, MSC_SCAN);
-
-   ioctl(uinp_fd, UI_SET_KEYBIT, BTN_LEFT);
-   ioctl(uinp_fd, UI_SET_RELBIT, BTN_RIGHT);
-   ioctl(uinp_fd, UI_SET_RELBIT, BTN_MIDDLE);
-   ioctl(uinp_fd, UI_SET_RELBIT, REL_X);
-   ioctl(uinp_fd, UI_SET_RELBIT, REL_Y);
-   ioctl(uinp_fd, UI_SET_RELBIT, REL_WHEEL);
-
-   ret = write(uinp_fd, uinp, sizeof(struct uinput_user_dev));
-   if (ret < 0)
-     {
-        DMWRN("mouse Failed to write UINPUT device\n");
-        goto fail_create_device;
-     }
-   if (ioctl(uinp_fd, UI_DEV_CREATE))
-     {
-        DMWRN("mouse Unable to create UINPUT device\n");
-        goto fail_create_device;
-     }
+   if (uinp_fd < 0)
+     goto fail_create_device;
 
    device->uinp_fd = uinp_fd;
    input_devmgr_data->inputgen.ptr_list =
@@ -1243,19 +1188,13 @@ _e_input_devmgr_create_mouse_device(struct wl_client *client, struct uinput_user
    return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NONE;
 
 fail_create_device:
-   if (uinp_fd >= 0) close(uinp_fd);
-   if (!exist_device_flag && device)
-     {
-        E_FREE(device);
-     }
-   if (cdata) E_FREE(cdata);
    return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NO_SYSTEM_RESOURCES;
 }
 
 static int
-_e_input_devmgr_create_touch_device(struct wl_client *client, struct uinput_user_dev *uinp)
+_e_input_devmgr_create_touch_device(struct wl_client *client, const char *device_name)
 {
-   int uinp_fd = -1, ret = -1;
+   int uinp_fd = -1;
    Eina_List *l, *l2;
    e_devicemgr_inputgen_client_data *cdata;
    e_devicemgr_inputgen_device_data *ddata, *device = NULL;
@@ -1263,7 +1202,7 @@ _e_input_devmgr_create_touch_device(struct wl_client *client, struct uinput_user
 
    EINA_LIST_FOREACH(input_devmgr_data->inputgen.touch_list, l, ddata)
      {
-        if (!strncmp(ddata->name, uinp->name, UINPUT_MAX_NAME_SIZE))
+        if (!strncmp(ddata->name, device_name, UINPUT_MAX_NAME_SIZE))
           {
              EINA_LIST_FOREACH(ddata->clients, l2, cdata)
                {
@@ -1284,7 +1223,7 @@ _e_input_devmgr_create_touch_device(struct wl_client *client, struct uinput_user
      {
         device = E_NEW(e_devicemgr_inputgen_device_data, 1);
         if (!device) return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NO_SYSTEM_RESOURCES;
-        strncpy(device->name, uinp->name, UINPUT_MAX_NAME_SIZE - 1);
+        strncpy(device->name, device_name, UINPUT_MAX_NAME_SIZE - 1);
      }
 
    cdata = NULL;
@@ -1303,42 +1242,10 @@ _e_input_devmgr_create_touch_device(struct wl_client *client, struct uinput_user
    if (exist_device_flag)
      return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NONE;
 
-   uinp_fd = open("/dev/uinput", O_WRONLY | O_NDELAY);
-   if ( uinp_fd < 0)
-     {
-        DMWRN("Failed to open /dev/uinput: (%d)\n", uinp_fd);
-        goto fail_create_device;
-     }
+   uinp_fd = e_devicemgr_create_virtual_device(E_DEVICEMGR_DEVICE_TYPE_TOUCH, device_name);
 
-   ioctl(uinp_fd, UI_SET_EVBIT, EV_KEY);
-   ioctl(uinp_fd, UI_SET_EVBIT, EV_SYN);
-   ioctl(uinp_fd, UI_SET_EVBIT, EV_MSC);
-   ioctl(uinp_fd, UI_SET_EVBIT, EV_ABS);
-
-   ioctl(uinp_fd, UI_SET_KEYBIT, BTN_TOUCH);
-   ioctl(uinp_fd, UI_SET_ABSBIT, ABS_X);
-   ioctl(uinp_fd, UI_SET_ABSBIT, ABS_Y);
-   ioctl(uinp_fd, UI_SET_ABSBIT, ABS_MT_SLOT);
-   ioctl(uinp_fd, UI_SET_ABSBIT, ABS_MT_TOUCH_MAJOR);
-   ioctl(uinp_fd, UI_SET_ABSBIT, ABS_MT_TOUCH_MINOR);
-   ioctl(uinp_fd, UI_SET_ABSBIT, ABS_MT_WIDTH_MAJOR);
-   ioctl(uinp_fd, UI_SET_ABSBIT, ABS_MT_POSITION_X);
-   ioctl(uinp_fd, UI_SET_ABSBIT, ABS_MT_POSITION_Y);
-   ioctl(uinp_fd, UI_SET_ABSBIT, ABS_MT_TRACKING_ID);
-
-   ioctl(uinp_fd, UI_SET_MSCBIT, MSC_SCAN);
-
-   ret = write(uinp_fd, uinp, sizeof(struct uinput_user_dev));
-   if (ret < 0)
-     {
-        DMWRN("touch Failed to write UINPUT device\n");
-        goto fail_create_device;
-     }
-   if (ioctl(uinp_fd, UI_DEV_CREATE))
-     {
-        DMWRN("touch Unable to create UINPUT device\n");
-        goto fail_create_device;
-     }
+   if (uinp_fd < 0)
+     goto fail_create_device;
 
    device->uinp_fd = uinp_fd;
    input_devmgr_data->inputgen.touch_list =
@@ -1347,19 +1254,12 @@ _e_input_devmgr_create_touch_device(struct wl_client *client, struct uinput_user
    return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NONE;
 
 fail_create_device:
-   if (uinp_fd >= 0) close(uinp_fd);
-   if (!exist_device_flag && device)
-     {
-        E_FREE(device);
-     }
-   if (cdata) E_FREE(cdata);
    return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NO_SYSTEM_RESOURCES;
 }
 
 static void
 _e_input_devmgr_cb_init_generator(struct wl_client *client, struct wl_resource *resource, uint32_t clas)
 {
-   struct uinput_user_dev uinp;
    int ret = TIZEN_INPUT_DEVICE_MANAGER_ERROR_NONE;
 
 #ifdef ENABLE_CYNARA
@@ -1371,17 +1271,12 @@ _e_input_devmgr_cb_init_generator(struct wl_client *client, struct wl_resource *
      }
 #endif
 
-   memset(&uinp, 0, sizeof(uinp));
-   strncpy(uinp.name, "Input Generator", UINPUT_MAX_NAME_SIZE - 1);
-   uinp.id.version = 4;
-   uinp.id.bustype = BUS_VIRTUAL;
-
    if (clas & TIZEN_INPUT_DEVICE_MANAGER_CLAS_KEYBOARD)
-     ret = _e_input_devmgr_create_keyboard_device(client, &uinp);
+     ret = _e_input_devmgr_create_keyboard_device(client, INPUT_GENERATOR_DEVICE);
    if (clas & TIZEN_INPUT_DEVICE_MANAGER_CLAS_MOUSE)
-     ret = _e_input_devmgr_create_mouse_device(client, &uinp);
+     ret = _e_input_devmgr_create_mouse_device(client, INPUT_GENERATOR_DEVICE);
    if (clas & TIZEN_INPUT_DEVICE_MANAGER_CLAS_TOUCHSCREEN)
-     ret = _e_input_devmgr_create_touch_device(client, &uinp);
+     ret = _e_input_devmgr_create_touch_device(client, INPUT_GENERATOR_DEVICE);
 
    if (ret == TIZEN_INPUT_DEVICE_MANAGER_ERROR_NONE)
      {
@@ -1396,7 +1291,6 @@ finish:
 static void
 _e_input_devmgr_cb_init_generator_with_name(struct wl_client *client, struct wl_resource *resource, uint32_t clas, const char *name)
 {
-   struct uinput_user_dev uinp;
    int ret = TIZEN_INPUT_DEVICE_MANAGER_ERROR_NONE;
 
 #ifdef ENABLE_CYNARA
@@ -1408,17 +1302,12 @@ _e_input_devmgr_cb_init_generator_with_name(struct wl_client *client, struct wl_
      }
 #endif
 
-   memset(&uinp, 0, sizeof(uinp));
-   strncpy(uinp.name, name, UINPUT_MAX_NAME_SIZE - 1);
-   uinp.id.version = 4;
-   uinp.id.bustype = BUS_VIRTUAL;
-
    if (clas & TIZEN_INPUT_DEVICE_MANAGER_CLAS_KEYBOARD)
-     ret = _e_input_devmgr_create_keyboard_device(client, &uinp);
+     ret = _e_input_devmgr_create_keyboard_device(client, name);
    if (clas & TIZEN_INPUT_DEVICE_MANAGER_CLAS_MOUSE)
-     ret = _e_input_devmgr_create_mouse_device(client, &uinp);
+     ret = _e_input_devmgr_create_mouse_device(client, name);
    if (clas & TIZEN_INPUT_DEVICE_MANAGER_CLAS_TOUCHSCREEN)
-     ret = _e_input_devmgr_create_touch_device(client, &uinp);
+     ret = _e_input_devmgr_create_touch_device(client, name);
 
    if (ret == TIZEN_INPUT_DEVICE_MANAGER_ERROR_NONE)
      {
@@ -2026,6 +1915,104 @@ _e_devicemgr_device_mgr_cb_bind(struct wl_client *client, void *data, uint32_t v
           }
      }
 }
+
+void
+e_devicemgr_destroy_virtual_device(int uinp_fd)
+{
+   ioctl(uinp_fd, UI_DEV_DESTROY, NULL);
+   close(uinp_fd);
+}
+
+int
+e_devicemgr_create_virtual_device(E_Devicemgr_Device_Type type, const char *name)
+{
+   int ret;
+   int uinp_fd = -1;
+   struct uinput_user_dev uinp;
+
+   memset(&uinp, 0, sizeof(uinp));
+   strncpy(uinp.name, name, UINPUT_MAX_NAME_SIZE - 1);
+   uinp.id.version = 4;
+   uinp.id.bustype = BUS_VIRTUAL;
+
+   uinp_fd = open("/dev/uinput", O_WRONLY | O_NDELAY);
+   if ( uinp_fd < 0)
+     {
+        DMWRN("Failed to open /dev/uinput: (%d)\n", uinp_fd);
+        goto fail_create_device;
+     }
+
+   if (E_DEVICEMGR_DEVICE_TYPE_KEY == type)
+     {
+       /* key device setup */
+       ioctl(uinp_fd, UI_SET_EVBIT, EV_KEY);
+       ioctl(uinp_fd, UI_SET_EVBIT, EV_SYN);
+       ioctl(uinp_fd, UI_SET_EVBIT, EV_MSC);
+       ioctl(uinp_fd, UI_SET_MSCBIT, MSC_SCAN);
+       ioctl(uinp_fd, UI_SET_KEYBIT, KEY_ESC);
+     }
+   else if (E_DEVICEMGR_DEVICE_TYPE_MOUSE == type)
+     {
+       /* mouse device setup */
+       ioctl(uinp_fd, UI_SET_EVBIT, EV_KEY);
+       ioctl(uinp_fd, UI_SET_EVBIT, EV_SYN);
+       ioctl(uinp_fd, UI_SET_EVBIT, EV_MSC);
+       ioctl(uinp_fd, UI_SET_EVBIT, EV_REL);
+       ioctl(uinp_fd, UI_SET_MSCBIT, MSC_SCAN);
+       ioctl(uinp_fd, UI_SET_KEYBIT, BTN_LEFT);
+       ioctl(uinp_fd, UI_SET_RELBIT, BTN_RIGHT);
+       ioctl(uinp_fd, UI_SET_RELBIT, BTN_MIDDLE);
+       ioctl(uinp_fd, UI_SET_RELBIT, REL_X);
+       ioctl(uinp_fd, UI_SET_RELBIT, REL_Y);
+       ioctl(uinp_fd, UI_SET_RELBIT, REL_WHEEL);
+     }
+   else if (E_DEVICEMGR_DEVICE_TYPE_TOUCH == type)
+     {
+       /* touch device setup */
+       ioctl(uinp_fd, UI_SET_EVBIT, EV_KEY);
+       ioctl(uinp_fd, UI_SET_EVBIT, EV_SYN);
+       ioctl(uinp_fd, UI_SET_EVBIT, EV_MSC);
+       ioctl(uinp_fd, UI_SET_EVBIT, EV_ABS);
+
+       ioctl(uinp_fd, UI_SET_KEYBIT, BTN_TOUCH);
+       ioctl(uinp_fd, UI_SET_ABSBIT, ABS_X);
+       ioctl(uinp_fd, UI_SET_ABSBIT, ABS_Y);
+       ioctl(uinp_fd, UI_SET_ABSBIT, ABS_MT_SLOT);
+       ioctl(uinp_fd, UI_SET_ABSBIT, ABS_MT_TOUCH_MAJOR);
+       ioctl(uinp_fd, UI_SET_ABSBIT, ABS_MT_TOUCH_MINOR);
+       ioctl(uinp_fd, UI_SET_ABSBIT, ABS_MT_WIDTH_MAJOR);
+       ioctl(uinp_fd, UI_SET_ABSBIT, ABS_MT_POSITION_X);
+       ioctl(uinp_fd, UI_SET_ABSBIT, ABS_MT_POSITION_Y);
+       ioctl(uinp_fd, UI_SET_ABSBIT, ABS_MT_TRACKING_ID);
+       ioctl(uinp_fd, UI_SET_MSCBIT, MSC_SCAN);
+     }
+   else
+     goto fail_create_device;
+
+   ret = write(uinp_fd, &uinp, sizeof(struct uinput_user_dev));
+
+   if (ret < 0)
+     {
+        DMWRN("Failed to write to uinput fd ! (fd:%d, type:%d, name:%s)\n", uinp_fd, type, name);
+        goto fail_create_device;
+     }
+
+   if (ioctl(uinp_fd, UI_DEV_CREATE))
+     {
+       DMWRN("Failed to create a virtual device ! (type:%d, name:%s)\n", type, name);
+       goto fail_create_device;
+     }
+
+   return uinp_fd;
+
+fail_create_device:
+
+   if (uinp_fd >= 0)
+     close(uinp_fd);
+
+   return -1;
+}
+
 
 int
 e_devicemgr_device_init(void)

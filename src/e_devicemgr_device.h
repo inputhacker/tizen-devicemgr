@@ -38,6 +38,8 @@
 #include <cynara-creds-socket.h>
 #endif
 
+#define INPUT_GENERATOR_DEVICE "Input Generator"
+
 typedef struct _e_devicemgr_input_devmgr_data e_devicemgr_input_devmgr_data;
 typedef struct _e_devicemgr_input_device_user_data e_devicemgr_input_device_user_data;
 typedef struct _e_devicemgr_inputgen_client_data e_devicemgr_inputgen_client_data;
@@ -110,8 +112,19 @@ struct _e_devicemgr_input_devmgr_data
    Eina_List *watched_clients;
 };
 
+typedef enum _E_Devicemgr_Device_Type
+{
+   E_DEVICEMGR_DEVICE_TYPE_NONE,
+   E_DEVICEMGR_DEVICE_TYPE_KEY,
+   E_DEVICEMGR_DEVICE_TYPE_MOUSE,
+   E_DEVICEMGR_DEVICE_TYPE_TOUCH,
+} E_Devicemgr_Device_Type;
+
 int e_devicemgr_device_init(void);
 void e_devicemgr_device_fini(void);
+
+void e_devicemgr_destroy_virtual_device(int uinp_fd);
+int e_devicemgr_create_virtual_device(E_Devicemgr_Device_Type type, const char *name);
 
 Eina_Bool e_devicemgr_block_check_keyboard(int type, void *event);
 Eina_Bool e_devicemgr_block_check_pointer(int type, void *event);

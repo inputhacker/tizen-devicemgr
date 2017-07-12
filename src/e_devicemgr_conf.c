@@ -20,6 +20,8 @@ e_devicemgr_conf_init(E_Devicemgr_Config_Data *dconfig)
 #define T E_Devicemgr_Conf_Edd
 #define D dconfig->conf_edd
    E_CONFIG_VAL(D, T, input.button_remap_enable, CHAR);
+   E_CONFIG_VAL(D, T, input.virtual_key_device_enable, CHAR);
+   E_CONFIG_VAL(D, T, input.virtual_mouse_device_enable, CHAR);
    E_CONFIG_VAL(D, T, input.back_keycode, INT);
 
 #undef T

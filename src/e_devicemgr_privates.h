@@ -2,7 +2,7 @@
 #define _E_DEVICEMGR_PRIVATE_H_
 
 #include "e.h"
-#define LOG_TAG	"DEVICEMGR"
+#define LOG_TAG "DEVICEMGR"
 #include "dlog.h"
 
 extern int _log_dom;
@@ -53,6 +53,8 @@ struct _E_Devicemgr_Conf_Edd
    struct
    {
       Eina_Bool button_remap_enable;
+      Eina_Bool virtual_key_device_enable;
+      Eina_Bool virtual_mouse_device_enable;
       int back_keycode;
    } input;
 };
