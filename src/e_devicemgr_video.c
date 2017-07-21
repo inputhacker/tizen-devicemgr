@@ -920,7 +920,7 @@ _e_video_geometry_cal_map(E_Video *video)
 
 static void
 _e_video_geometry_cal_to_input(int output_w, int output_h, int input_w, int input_h,
-                               tdm_transform trasnform, int ox, int oy, int *ix, int *iy)
+                               uint32_t trasnform, int ox, int oy, int *ix, int *iy)
 {
    float ratio_w, ratio_h;
 
