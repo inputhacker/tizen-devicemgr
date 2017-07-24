@@ -679,7 +679,7 @@ static void
 _e_input_devmgr_request_client_add(struct wl_client *client, struct wl_resource *resource, uint32_t clas, uint32_t duration)
 {
    struct wl_listener *destroy_listener = NULL;
-   double milli_duration = duration / 1000;
+   double milli_duration = (double)(duration) / 1000.0;
 
    /* Last request of block can renew timer time */
    if (input_devmgr_data->duration_timer)
@@ -692,8 +692,16 @@ _e_input_devmgr_request_client_add(struct wl_client *client, struct wl_resource 
    input_devmgr_data->block_client = client;
 
    destroy_listener = E_NEW(struct wl_listener, 1);
+   EINA_SAFETY_ON_NULL_GOTO(destroy_listener, failed);
    destroy_listener->notify = _e_input_devmgr_client_cb_destroy;
    wl_client_add_destroy_listener(client, destroy_listener);
+
+   return;
+
+failed:
+   ecore_timer_del(input_devmgr_data->duration_timer);
+   input_devmgr_data->duration_timer = NULL;
+   input_devmgr_data->block_client = NULL;
 }
 
 static void
