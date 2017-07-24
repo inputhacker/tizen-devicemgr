@@ -9,6 +9,8 @@ _e_devicemgr_conf_value_check(E_Devicemgr_Config_Data* dconfig)
    EINA_SAFETY_ON_NULL_RETURN(dconfig->conf);
 
    dconfig->conf->input.back_keycode = E_DEVICEMGR_INPUT_DFLT_BACK_KEYCODE;
+
+   E_CONFIG_LIMIT(dconfig->conf->dpms.timeout, 0.0, 3.0);
 }
 
 void
@@ -22,7 +24,8 @@ e_devicemgr_conf_init(E_Devicemgr_Config_Data *dconfig)
    E_CONFIG_VAL(D, T, input.button_remap_enable, CHAR);
    E_CONFIG_VAL(D, T, input.back_keycode, INT);
    E_CONFIG_VAL(D, T, eom_enable, CHAR);
-
+   E_CONFIG_VAL(D, T, dpms.wait_for_sync, CHAR);
+   E_CONFIG_VAL(D, T, dpms.timeout, DOUBLE);
 #undef T
 #undef D
    dconfig->conf = e_config_domain_load("module.devicemgr", dconfig->conf_edd);

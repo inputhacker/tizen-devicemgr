@@ -56,6 +56,12 @@ struct _E_Devicemgr_Conf_Edd
       int back_keycode;
    } input;
    Eina_Bool eom_enable;
+
+   struct
+   {
+      Eina_Bool wait_for_sync;
+      double timeout;
+   } dpms;
 };
 
 struct _E_Devicemgr_Config_Data

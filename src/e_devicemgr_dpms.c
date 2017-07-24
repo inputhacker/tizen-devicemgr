@@ -22,6 +22,65 @@ static unsigned int dpms_value;
 static Eldbus_Connection *conn;
 static Eldbus_Service_Interface *iface;
 
+static Eina_List *dpms_handlers = NULL;
+static Ecore_Timer *dpms_timer = NULL;
+
+static Eina_Bool
+_check_all_window_hidden(void)
+{
+   E_Client *ec = NULL;
+   Eina_Bool all_hidden = EINA_TRUE;
+
+   E_CLIENT_REVERSE_FOREACH(ec)
+     {
+        if (ec->ignored) continue;
+        if (ec->is_cursor) continue;
+        if (e_policy_client_is_quickpanel(ec)) continue;
+        if (e_object_is_del(E_OBJECT(ec))) continue;
+        if (!E_INTERSECTS(ec->x, ec->y, ec->w, ec->h, ec->zone->x, ec->zone->y, ec->zone->w, ec->zone->h))
+          continue;
+
+        if (evas_object_visible_get(ec->frame))
+          {
+             all_hidden = EINA_FALSE;
+             break;
+          }
+     }
+
+   return all_hidden;
+}
+
+static void
+_e_devicemgr_dpms_set(Ecore_Drm_Output *output, unsigned int value)
+{
+   E_Zone *zone;
+   Eina_List *zl;
+   E_Zone_Display_State state;
+
+   if (value == E_DEVICEMGR_DPMS_MODE_ON)
+     state = E_ZONE_DISPLAY_STATE_ON;
+   else
+     state = E_ZONE_DISPLAY_STATE_OFF;
+
+   EINA_LIST_FOREACH(e_comp->zones, zl, zone)
+     {
+        e_zone_display_state_set(zone, state);
+     }
+
+   ecore_drm_output_dpms_set(output, value);
+}
+
+static Eina_Bool
+_dpms_timeout_cb(void *data EINA_UNUSED)
+{
+   DBG("[devicemgr] DPMS SET to %d..", dpms_value);
+   _e_devicemgr_dpms_set(dpms_output, dpms_value);
+
+   dpms_timer = NULL;
+
+   return ECORE_CALLBACK_CANCEL;
+}
+
 static Eldbus_Message *
 _e_devicemgr_dpms_set_cb(const Eldbus_Service_Interface *iface, const Eldbus_Message *msg)
 {
@@ -39,7 +98,7 @@ _e_devicemgr_dpms_set_cb(const Eldbus_Service_Interface *iface, const Eldbus_Mes
         E_Zone *zone;
         Eina_List *zl;
 
-        DBG("[devicemgr] DPMS value: %d", uint32);
+        DBG("[devicemgr] Request DPMS value: %d", uint32);
 
         devs = eina_list_clone(ecore_drm_devices_get());
         EINA_LIST_FOREACH(devs, l, dev)
@@ -48,23 +107,53 @@ _e_devicemgr_dpms_set_cb(const Eldbus_Service_Interface *iface, const Eldbus_Mes
                int x;
                ecore_drm_output_position_get(output, &x, NULL);
 
-               EINA_LIST_FOREACH(e_comp->zones, zl, zone)
-                 {
-                    if (uint32 == E_DEVICEMGR_DPMS_MODE_ON)
-                      e_zone_display_state_set(zone, E_ZONE_DISPLAY_STATE_ON);
-                    else if (uint32 == E_DEVICEMGR_DPMS_MODE_OFF)
-                      e_zone_display_state_set(zone, E_ZONE_DISPLAY_STATE_OFF);
-                 }
-
                /* only for main output */
                if (x != 0)
                  continue;
 
-               DBG("[devicemgr] set DPMS");
-
                dpms_output = output;
                dpms_value = uint32;
-               ecore_drm_output_dpms_set(output, uint32);
+
+               if (dconfig->conf->dpms.wait_for_sync)
+                 {
+                    if (dpms_timer)
+                      {
+                         ecore_timer_del(dpms_timer);
+                         dpms_timer = NULL;
+                      }
+
+                    if (uint32 == E_DEVICEMGR_DPMS_MODE_ON)
+                      {
+                         Eina_Bool all_hide = _check_all_window_hidden();
+                         if (all_hide)
+                           {
+                              DBG("[devicemgr] DPMS SET to %d..", uint32);
+                              _e_devicemgr_dpms_set(output, uint32);
+                           }
+                         else
+                           {
+                              dpms_timer = ecore_timer_add(dconfig->conf->dpms.timeout, _dpms_timeout_cb, NULL);
+                           }
+                      }
+                    else if (uint32 == E_DEVICEMGR_DPMS_MODE_OFF)
+                      {
+                         DBG("[devicemgr] DPMS SET to %d..", uint32);
+                         _e_devicemgr_dpms_set(output, uint32);
+                      }
+                 }
+               else
+                 {
+                    EINA_LIST_FOREACH(e_comp->zones, zl, zone)
+                      {
+                         if (uint32 == E_DEVICEMGR_DPMS_MODE_ON)
+                           e_zone_display_state_set(zone, E_ZONE_DISPLAY_STATE_ON);
+                         else if (uint32 == E_DEVICEMGR_DPMS_MODE_OFF)
+                           e_zone_display_state_set(zone, E_ZONE_DISPLAY_STATE_OFF);
+                      }
+
+                    DBG("[devicemgr] DPMS SET to %d..", uint32);
+                    ecore_drm_output_dpms_set(output, uint32);
+                 }
             }
 
         result = uint32;
@@ -152,6 +241,57 @@ failed:
    return ECORE_CALLBACK_CANCEL;
 }
 
+static void
+_e_dpms_cb_evas_hide(void *data EINA_UNUSED, Evas *e EINA_UNUSED, Evas_Object *obj, void *event_info EINA_UNUSED)
+{
+   E_Client *ec;
+   Eina_Bool all_hidden;
+
+   ec = evas_object_data_get(obj, "E_Client");
+   if (!ec) return;
+
+   if (dpms_timer)
+     {
+        all_hidden = _check_all_window_hidden();
+        if (all_hidden)
+          {
+             ecore_timer_del(dpms_timer);
+             dpms_timer = NULL;
+
+             DBG("[devicemgr] DPMS SET to %d..", dpms_value);
+             _e_devicemgr_dpms_set(dpms_output, dpms_value);
+          }
+     }
+}
+
+static Eina_Bool
+_e_dpms_cb_client_add(void *data, int type EINA_UNUSED, void *event)
+{
+   E_Event_Client *ev = event;
+   E_Client *ec = ev->ec;
+
+   if (!dconfig->conf->dpms.wait_for_sync)
+     return ECORE_CALLBACK_PASS_ON;
+
+   evas_object_event_callback_add(ec->frame, EVAS_CALLBACK_HIDE, _e_dpms_cb_evas_hide, NULL);
+
+   return ECORE_CALLBACK_PASS_ON;
+}
+
+static Eina_Bool
+_e_dpms_cb_client_remove(void *data, int type EINA_UNUSED, void *event)
+{
+   E_Event_Client *ev = event;
+   E_Client *ec = ev->ec;
+
+   if (!dconfig->conf->dpms.wait_for_sync)
+     return ECORE_CALLBACK_PASS_ON;
+
+   evas_object_event_callback_del(ec->frame, EVAS_CALLBACK_HIDE, _e_dpms_cb_evas_hide);
+
+   return ECORE_CALLBACK_PASS_ON;
+}
+
 int
 e_devicemgr_dpms_init(void)
 {
@@ -159,12 +299,17 @@ e_devicemgr_dpms_init(void)
 
    _e_devicemgr_dpms_dbus_init(NULL);
 
+   E_LIST_HANDLER_APPEND(dpms_handlers, E_EVENT_CLIENT_ADD, _e_dpms_cb_client_add, NULL);
+   E_LIST_HANDLER_APPEND(dpms_handlers, E_EVENT_CLIENT_REMOVE, _e_dpms_cb_client_remove, NULL);
+
    return 1;
 }
 
 void
 e_devicemgr_dpms_fini(void)
 {
+   E_FREE_LIST(dpms_handlers, ecore_event_handler_del);
+
    if (iface)
      {
         eldbus_service_interface_unregister(iface);
