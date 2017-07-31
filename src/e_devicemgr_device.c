@@ -170,6 +170,12 @@ _e_devicemgr_del_device(const char *name, const char *identifier, const char *se
    if (e_comp_wl->input_device_manager.last_device_ptr == dev)
      e_comp_wl->input_device_manager.last_device_ptr = NULL;
 
+   if (e_comp_wl->input_device_manager.last_device_touch == dev)
+     e_comp_wl->input_device_manager.last_device_touch = NULL;
+
+   if (e_comp_wl->input_device_manager.last_device_kbd == dev)
+     e_comp_wl->input_device_manager.last_device_kbd = NULL;
+
    free(dev);
    TRACE_INPUT_END();
 }
@@ -336,6 +342,14 @@ _e_devicemgr_add_device(const char *name, const char *identifier, const char *se
 
    if (dev->clas == ECORE_DEVICE_CLASS_MOUSE)
      e_comp_wl->input_device_manager.last_device_ptr = dev;
+
+   if (!e_comp_wl->input_device_manager.last_device_touch &&
+       dev->clas == ECORE_DEVICE_CLASS_TOUCH)
+     e_comp_wl->input_device_manager.last_device_touch = dev;
+
+   if (!e_comp_wl->input_device_manager.last_device_kbd &&
+       dev->clas == ECORE_DEVICE_CLASS_KEYBOARD)
+     e_comp_wl->input_device_manager.last_device_kbd = dev;
 
    TRACE_INPUT_END();
 }
