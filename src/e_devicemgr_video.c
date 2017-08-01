@@ -1641,9 +1641,9 @@ _e_video_set(E_Video *video, E_Client *ec)
            maxw = MIN(omaxw, pmaxw);
 
         if (omaxh != -1 && pmaxh == -1)
-           maxw = omaxh;
+           maxh = omaxh;
         else if (omaxh == -1 && pmaxh != -1)
-           maxw = pmaxh;
+           maxh = pmaxh;
         else
            maxh = MIN(omaxh, pmaxh);
 
