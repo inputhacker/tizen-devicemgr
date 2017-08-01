@@ -493,8 +493,8 @@ _e_eom_util_calculate_fullsize(int src_h, int src_v, int dst_size_h, int dst_siz
 {
    double h_ratio, v_ratio;
 
-   h_ratio = src_h / dst_size_h;
-   v_ratio = src_v / dst_size_v;
+   h_ratio = (double)src_h / (double)dst_size_h;
+   v_ratio = (double)src_v / (double)dst_size_v;
 
    if (h_ratio == v_ratio)
      {
