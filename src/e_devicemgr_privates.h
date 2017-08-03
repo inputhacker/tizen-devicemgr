@@ -52,10 +52,10 @@ struct _E_Devicemgr_Conf_Edd
 {
    struct
    {
-      Eina_Bool button_remap_enable;
-      Eina_Bool virtual_key_device_enable;
-      Eina_Bool virtual_mouse_device_enable;
-      int back_keycode;
+      Eina_Bool button_remap_enable;          // enable feature of remap mouse right button to back key
+      Eina_Bool virtual_key_device_enable;    // create a virtual keyboard device
+      Eina_Bool virtual_mouse_device_enable;  // create a virtual mouse device
+      int back_keycode;                       // keycode of back key
    } input;
 };
 
