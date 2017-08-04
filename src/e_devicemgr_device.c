@@ -109,7 +109,9 @@ _e_devicemgr_del_device(const char *name, const char *identifier, const char *se
 
    EINA_LIST_FOREACH(e_comp_wl->input_device_manager.device_list, l, dev)
      {
-        if ((dev->clas == clas) && (dev->subclas == subclas) && (!strcmp(dev->name, name))  && (!strcmp(dev->identifier, identifier)))
+        if ((dev->clas == clas) && (dev->subclas == subclas) &&
+            (dev->name && (!strcmp(dev->name, name))) &&
+            (dev->identifier && (!strcmp(dev->identifier, identifier))))
           break;
      }
    if (!dev)
@@ -119,13 +121,10 @@ _e_devicemgr_del_device(const char *name, const char *identifier, const char *se
      }
 
    if ((input_devmgr_data->detent.identifier) &&
-       (!strncmp(dev->name, "tizen_detent", sizeof("tizen_detent"))))
+       (dev->name && (!strncmp(dev->name, "tizen_detent", sizeof("tizen_detent")))))
      {
         eina_stringshare_del(input_devmgr_data->detent.identifier);
      }
-
-   if (dev->name) eina_stringshare_del(dev->name);
-   if (dev->identifier) eina_stringshare_del(dev->identifier);
 
    serial = wl_display_next_serial(e_comp_wl->wl.disp);
 
@@ -150,6 +149,9 @@ _e_devicemgr_del_device(const char *name, const char *identifier, const char *se
                }
           }
      }
+
+   if (dev->name) eina_stringshare_del(dev->name);
+   if (dev->identifier) eina_stringshare_del(dev->identifier);
 
    EINA_LIST_FREE(dev->resources, res)
      {
