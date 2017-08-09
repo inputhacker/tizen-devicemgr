@@ -1192,6 +1192,7 @@ _e_video_vblank_handler(tdm_output *output, unsigned int sequence,
    video->waiting_vblank = EINA_FALSE;
 
    if (!video->waiting_list) return;
+   if (video->waiting_video_set) return;
 
    mbuf = eina_list_nth(video->waiting_list, 0);
 
@@ -1225,6 +1226,7 @@ _e_video_video_set_hook(void *data, E_Plane *plane)
    video->waiting_video_set = EINA_FALSE;
 
    if (!video->waiting_list) return;
+   if (video->waiting_vblank) return;
 
    mbuf = eina_list_nth(video->waiting_list, 0);
 
@@ -1384,7 +1386,7 @@ _e_video_buffer_show(E_Video *video, E_Devmgr_Buf *mbuf, unsigned int transform)
    if (mbuf->comp_buffer)
      e_comp_wl_buffer_reference(&mbuf->buffer_ref, mbuf->comp_buffer);
 
-   if (!video->waiting_vblank || !video->waiting_video_set)
+   if (!video->waiting_vblank && !video->waiting_video_set)
       video->committed_list = eina_list_append(video->committed_list, mbuf);
    else
      {
