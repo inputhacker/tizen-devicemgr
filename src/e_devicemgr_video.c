@@ -1457,9 +1457,27 @@ _e_video_cb_evas_show(void *data, Evas *e EINA_UNUSED, Evas_Object *obj EINA_UNU
         return;
      }
 
+   if (!video->layer)
+     {
+        VIN("set layer: show");
+        if (!_e_video_set_layer(video, EINA_TRUE))
+          {
+             VER("set layer failed");
+             return;
+          }
+        // need call tdm property in list
+        Tdm_Prop_Value *prop;
+        EINA_LIST_FREE(video->tdm_prop_list, prop)
+          {
+             VIN("call property(%s), value(%d)", prop->name, (unsigned int)prop->value.u32);
+             tdm_layer_set_property(video->layer, prop->id, prop->value);
+             free(prop);
+          }
+     }
+
    VIN("evas show (ec:%p)", video->ec);
    if (video->current_fb)
-     _e_video_frame_buffer_show(video, video->current_fb);
+     _e_video_buffer_show(video, video->current_fb, video->current_fb->content_t);
 }
 
 static void
