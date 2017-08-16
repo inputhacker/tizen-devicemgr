@@ -32,9 +32,17 @@ _e_tizen_embedded_compositor_cb_get_socket(struct wl_client *client,
    close(sock_fd);
 }
 
+static void
+_e_tizen_embedded_compositor_cb_destroy(struct wl_client *client,
+                          struct wl_resource *resource)
+{
+   wl_resource_destroy(resource);
+}
+
 static const struct tizen_embedded_compositor_interface _e_tizen_embedded_compositor_interface =
 {
-   _e_tizen_embedded_compositor_cb_get_socket
+   _e_tizen_embedded_compositor_cb_get_socket,
+   _e_tizen_embedded_compositor_cb_destroy
 };
 
 static void
