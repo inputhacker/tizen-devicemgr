@@ -99,11 +99,13 @@ _e_devicemgr_event_filter(void *data, void *loop_data EINA_UNUSED, int type, voi
      {
         return _e_devicemgr_input_pointer_process(type, event);
      }
-   else if (ECORE_EVENT_DEVICE_ADD == type)
+   else if ((ECORE_EVENT_DEVICE_ADD == type) ||
+            (ECORE_EVENT_DEVICE_DEL == type))
      {
         return e_devicemgr_check_detent_device_add(type, event);
      }
-   else if (ECORE_DRM_EVENT_INPUT_DEVICE_ADD == type)
+   else if ((ECORE_DRM_EVENT_INPUT_DEVICE_ADD == type) ||
+            (ECORE_DRM_EVENT_INPUT_DEVICE_DEL == type))
      {
         return e_devicemgr_check_detent_device_add(type, event);
      }

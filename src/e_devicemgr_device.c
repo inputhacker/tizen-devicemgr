@@ -559,7 +559,8 @@ e_devicemgr_check_detent_device_add(int type, void *event)
    Ecore_Event_Device_Info *e_device_info = NULL;
    Ecore_Drm_Event_Input_Device_Add *e_device_add = NULL;
 
-   if (ECORE_EVENT_DEVICE_ADD == type)
+   if ((ECORE_EVENT_DEVICE_ADD == type) ||
+       (ECORE_EVENT_DEVICE_DEL == type))
      {
         e_device_info = (Ecore_Event_Device_Info *)event;
 
@@ -567,7 +568,8 @@ e_devicemgr_check_detent_device_add(int type, void *event)
         if (e_devicemgr_is_detent_device(e_device_info->name))
           e_device_info->clas &= ~ECORE_DEVICE_CLASS_MOUSE;
      }
-   else if (ECORE_DRM_EVENT_INPUT_DEVICE_ADD == type)
+   else if ((ECORE_DRM_EVENT_INPUT_DEVICE_ADD == type) ||
+            (ECORE_DRM_EVENT_INPUT_DEVICE_DEL == type))
      {
         e_device_add = (Ecore_Drm_Event_Input_Device_Add *)event;
 
