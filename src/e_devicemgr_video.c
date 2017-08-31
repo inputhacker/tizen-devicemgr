@@ -2547,10 +2547,17 @@ _e_devicemgr_video_cb_get_viewport(struct wl_client *client,
      }
 }
 
+static void
+_e_devicemgr_video_cb_destroy(struct wl_client *client, struct wl_resource *resource)
+{
+   wl_resource_destroy(resource);
+}
+
 static const struct tizen_video_interface _e_devicemgr_video_interface =
 {
    _e_devicemgr_video_cb_get_object,
    _e_devicemgr_video_cb_get_viewport,
+   _e_devicemgr_video_cb_destroy,
 };
 
 static void
@@ -2560,7 +2567,7 @@ _e_devicemgr_video_cb_bind(struct wl_client *client, void *data, uint32_t versio
    const tbm_format *formats = NULL;
    int i, count = 0;
 
-   if (!(res = wl_resource_create(client, &tizen_video_interface, MIN(version, 1), id)))
+   if (!(res = wl_resource_create(client, &tizen_video_interface, MIN(version, 2), id)))
      {
         ERR("Could not create tizen_video_interface resource: %m");
         wl_client_post_no_memory(client);
@@ -2666,7 +2673,7 @@ e_devicemgr_video_init(void)
      }
 
    e_comp->wl_comp_data->video.global =
-     wl_global_create(e_comp_wl->wl.disp, &tizen_video_interface, 1, NULL, _e_devicemgr_video_cb_bind);
+     wl_global_create(e_comp_wl->wl.disp, &tizen_video_interface, 2, NULL, _e_devicemgr_video_cb_bind);
 
    /* try to add tizen_video to wayland globals */
    if (!e_comp->wl_comp_data->video.global)
