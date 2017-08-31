@@ -1691,6 +1691,12 @@ _e_input_devmgr_cb_pointer_warp(struct wl_client *client, struct wl_resource *re
 }
 
 static void
+_e_input_devmgr_cb_init_generator_with_name(struct wl_client *client, struct wl_resource *resource, uint32_t clas, const char *name)
+{
+   ;// nothing to do. next feature can support this request.
+}
+
+static void
 _e_input_devmgr_cb_destroy(struct wl_client *client, struct wl_resource *resource)
 {
    wl_resource_destroy(resource);
@@ -1705,6 +1711,7 @@ static const struct tizen_input_device_manager_interface _e_input_devmgr_impleme
    _e_input_devmgr_cb_generate_pointer,
    _e_input_devmgr_cb_generate_touch,
    _e_input_devmgr_cb_pointer_warp,
+   _e_input_devmgr_cb_init_generator_with_name,
    _e_input_devmgr_cb_destroy,
 };
 
@@ -1729,7 +1736,7 @@ _e_devicemgr_device_mgr_cb_bind(struct wl_client *client, void *data, uint32_t v
    if (!e_comp_wl) return;
    if (!e_comp_wl->wl.disp) return;
 
-   if (!(res = wl_resource_create(client, &tizen_input_device_manager_interface, MIN(version, 2), id)))
+   if (!(res = wl_resource_create(client, &tizen_input_device_manager_interface, MIN(version, 3), id)))
      {
         DMERR("Could not create tizen_devices_interface resource: %m");
         wl_client_post_no_memory(client);
@@ -1789,7 +1796,7 @@ e_devicemgr_device_init(void)
    TRACE_INPUT_BEGIN(e_devicemgr_device_init);
 
    /* try to add tizen_input_device_manager to wayland globals */
-   e_comp_wl->input_device_manager.global = wl_global_create(e_comp_wl->wl.disp, &tizen_input_device_manager_interface, 2,
+   e_comp_wl->input_device_manager.global = wl_global_create(e_comp_wl->wl.disp, &tizen_input_device_manager_interface, 3,
                          NULL, _e_devicemgr_device_mgr_cb_bind);
    if (!e_comp_wl->input_device_manager.global)
      {
