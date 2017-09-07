@@ -1729,7 +1729,7 @@ _e_tz_screenshooter_cb_bind(struct wl_client *client, void *data, uint32_t versi
    struct wl_resource *res;
    int i;
 
-   if (!(res = wl_resource_create(client, &tizen_screenshooter_interface, MIN(version, 2), id)))
+   if (!(res = wl_resource_create(client, &tizen_screenshooter_interface, version, id)))
      {
         ERR("Could not create tizen_screenshooter resource: %m");
         wl_client_post_no_memory(client);
@@ -1861,7 +1861,7 @@ e_devicemgr_screenshooter_init(void)
      }
 
    /* try to add tizen_screenshooter to wayland globals */
-   if (!wl_global_create(e_comp_wl->wl.disp, &tizen_screenshooter_interface, 2,
+   if (!wl_global_create(e_comp_wl->wl.disp, &tizen_screenshooter_interface, 1,
                          NULL, _e_tz_screenshooter_cb_bind))
      {
         ERR("Could not add tizen_screenshooter to wayland globals");
