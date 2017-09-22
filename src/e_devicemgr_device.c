@@ -1817,7 +1817,15 @@ finish:
 static  int
 _e_devicemgr_pointer_warp(int x, int y)
 {
-   ecore_evas_pointer_warp(e_comp->ee, x, y);
+   Eina_List *list, *l;
+   E_Input_Device *dev_data;
+
+   list = (Eina_List *)e_input_devices_get();
+
+   EINA_LIST_FOREACH(list, l, dev_data)
+     {
+        e_input_device_pointer_warp(dev_data, x, y);
+     }
    DMDBG("The pointer warped to (%d, %d) !\n", x, y);
 
    return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NONE;
