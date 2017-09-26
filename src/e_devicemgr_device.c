@@ -616,7 +616,7 @@ e_devicemgr_check_detent_device_add(int type, void *event)
 
         /* Remove pointer capability from tizen detent device */
         if (e_devicemgr_is_detent_device(e_device_add->name))
-          e_device_add->caps &= ~E_INPUT_SEAT_POINTER;
+          e_device_add->seat_caps &= ~E_INPUT_SEAT_POINTER;
      }
 
    return ECORE_CALLBACK_PASS_ON;
