@@ -3,7 +3,6 @@
 
 #define E_COMP_WL
 #include "e.h"
-#include <Ecore_Drm.h>
 #include "e_comp_wl.h"
 #include <wayland-server.h>
 

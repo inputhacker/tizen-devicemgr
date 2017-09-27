@@ -1,7 +1,6 @@
 #include "e_devicemgr_device.h"
 #include "e_devicemgr_privates.h"
 #include <tizen-extension-server-protocol.h>
-#include <Ecore_Drm.h>
 
 static Eina_List *handlers = NULL;
 
@@ -211,9 +210,9 @@ _e_devicemgr_add_device(const char *name, const char *identifier, const char *se
    struct wl_resource *res, *seat_res, *dev_mgr_res;
    uint32_t serial;
    struct wl_array axes;
-   Ecore_Drm_Device *drm_device_data = NULL;
-   Ecore_Drm_Seat *seat = NULL;
-   Ecore_Drm_Evdev *edev = NULL;
+   E_Input_Device *device_data = NULL;
+   E_Input_Seat *seat = NULL;
+   E_Input_Evdev *edev = NULL;
    int wheel_click_angle;
    Eina_List *dev_list;
    e_devicemgr_input_device_user_data *device_user_data;
@@ -325,16 +324,16 @@ _e_devicemgr_add_device(const char *name, const char *identifier, const char *se
        (dev->name && !strncmp(dev->name, "tizen_detent", sizeof("tizen_detent"))))
      {
         input_devmgr_data->detent.identifier = (char *)eina_stringshare_add(identifier);
-        dev_list = (Eina_List *)ecore_drm_devices_get();
-        EINA_LIST_FOREACH(dev_list, l1, drm_device_data)
+        dev_list = (Eina_List *)e_input_devices_get();
+        EINA_LIST_FOREACH(dev_list, l1, device_data)
           {
-             EINA_LIST_FOREACH(drm_device_data->seats, l2, seat)
+             EINA_LIST_FOREACH(device_data->seats, l2, seat)
                {
-                  EINA_LIST_FOREACH(ecore_drm_seat_evdev_list_get(seat), l3, edev)
+                  EINA_LIST_FOREACH(e_input_seat_evdev_list_get(seat), l3, edev)
                     {
-                       if (!strncmp(ecore_drm_evdev_name_get(edev), "tizen_detent", sizeof("tizen_detent")))
+                       if (!strncmp(e_input_evdev_name_get(edev), "tizen_detent", sizeof("tizen_detent")))
                          {
-                            wheel_click_angle = ecore_drm_evdev_wheel_click_angle_get(edev);
+                            wheel_click_angle = e_input_evdev_wheel_click_angle_get(edev);
                             input_devmgr_data->detent.wheel_click_angle = wheel_click_angle;
                          }
                     }
@@ -599,7 +598,7 @@ Eina_Bool
 e_devicemgr_check_detent_device_add(int type, void *event)
 {
    Ecore_Event_Device_Info *e_device_info = NULL;
-   Ecore_Drm_Event_Input_Device_Add *e_device_add = NULL;
+   E_Input_Event_Input_Device_Add *e_device_add = NULL;
 
    if ((ECORE_EVENT_DEVICE_ADD == type) ||
        (ECORE_EVENT_DEVICE_DEL == type))
@@ -610,14 +609,14 @@ e_devicemgr_check_detent_device_add(int type, void *event)
         if (e_devicemgr_is_detent_device(e_device_info->name))
           e_device_info->clas &= ~ECORE_DEVICE_CLASS_MOUSE;
      }
-   else if ((ECORE_DRM_EVENT_INPUT_DEVICE_ADD == type) ||
-            (ECORE_DRM_EVENT_INPUT_DEVICE_DEL == type))
+   else if ((E_INPUT_EVENT_INPUT_DEVICE_ADD == type) ||
+            (E_INPUT_EVENT_INPUT_DEVICE_DEL == type))
      {
-        e_device_add = (Ecore_Drm_Event_Input_Device_Add *)event;
+        e_device_add = (E_Input_Event_Input_Device_Add *)event;
 
         /* Remove pointer capability from tizen detent device */
         if (e_devicemgr_is_detent_device(e_device_add->name))
-          e_device_add->caps &= ~EVDEV_SEAT_POINTER;
+          e_device_add->caps &= ~E_INPUT_SEAT_POINTER;
      }
 
    return ECORE_CALLBACK_PASS_ON;
@@ -1434,7 +1433,7 @@ _e_input_devmgr_generate_key_event(const char *key, Eina_Bool pressed, char *ide
    e->data = NULL;
 
    e->modifiers = 0;
-   e->dev = ecore_drm_evdev_get_ecore_device(identifier, ECORE_DEVICE_CLASS_KEYBOARD);
+   e->dev = e_input_evdev_get_ecore_device(identifier, ECORE_DEVICE_CLASS_KEYBOARD);
 
    DMDBG("Generate key event: key: %s, keycode: %d, iden: %s\n", e->key, e->keycode, identifier);
 
@@ -1567,7 +1566,7 @@ _e_input_devmgr_generate_pointer_event(Eina_Bool state, int x, int y, int button
    e->multi.y = e->y;
    e->multi.root.x = e->x;
    e->multi.root.y = e->y;
-   e->dev = ecore_drm_evdev_get_ecore_device(identifier, ECORE_DEVICE_CLASS_MOUSE);
+   e->dev = e_input_evdev_get_ecore_device(identifier, ECORE_DEVICE_CLASS_MOUSE);
    e->buttons = buttons;
 
    DMDBG("Generate mouse button event: button: %d (state: %d)\n", buttons, state);
@@ -1620,7 +1619,7 @@ _e_input_devmgr_generate_pointer_move_event(int x, int y, char *identifier)
    e->multi.y = e->y;
    e->multi.root.x = e->x;
    e->multi.root.y = e->y;
-   e->dev = ecore_drm_evdev_get_ecore_device(identifier, ECORE_DEVICE_CLASS_MOUSE);
+   e->dev = e_input_evdev_get_ecore_device(identifier, ECORE_DEVICE_CLASS_MOUSE);
 
    DMDBG("Generate mouse move event: (%d, %d)\n", e->x, e->y);
 
@@ -1709,7 +1708,7 @@ _e_input_devmgr_generate_touch_event(uint32_t type, uint32_t x, uint32_t y, uint
    e->multi.y = e->y;
    e->multi.root.x = e->x;
    e->multi.root.y = e->y;
-   e->dev = ecore_drm_evdev_get_ecore_device(identifier, ECORE_DEVICE_CLASS_TOUCH);
+   e->dev = e_input_evdev_get_ecore_device(identifier, ECORE_DEVICE_CLASS_TOUCH);
    e->buttons = 1;
 
    DMDBG("Generate touch event: device: %d (%d, %d)\n", e->multi.device, e->x, e->y);
@@ -1752,7 +1751,7 @@ _e_input_devmgr_generate_touch_update_event(uint32_t x, uint32_t y, uint32_t fin
    e->multi.y = e->y;
    e->multi.root.x = e->x;
    e->multi.root.y = e->y;
-   e->dev = ecore_drm_evdev_get_ecore_device(identifier, ECORE_DEVICE_CLASS_TOUCH);
+   e->dev = e_input_evdev_get_ecore_device(identifier, ECORE_DEVICE_CLASS_TOUCH);
 
    DMDBG("Generate touch move event: device: %d (%d, %d)\n", e->multi.device, e->x, e->y);
 
@@ -1818,7 +1817,7 @@ finish:
 static  int
 _e_devicemgr_pointer_warp(int x, int y)
 {
-   ecore_evas_pointer_warp(e_comp->ee, x, y);
+   e_input_device_pointer_warp(NULL, x, y);
    DMDBG("The pointer warped to (%d, %d) !\n", x, y);
 
    return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NONE;
