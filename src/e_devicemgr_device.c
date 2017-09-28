@@ -256,7 +256,7 @@ _e_devicemgr_add_device(const char *name, const char *identifier, const char *se
                  {
                   DMERR("Could not create tizen_input_device resource");
                   TRACE_INPUT_END();
-                  return;
+                  break;
                 }
 
              device_user_data = E_NEW(e_devicemgr_input_device_user_data, 1);
@@ -264,7 +264,7 @@ _e_devicemgr_add_device(const char *name, const char *identifier, const char *se
                {
                   DMERR("Failed to allocate memory for input device user data\n");
                   TRACE_INPUT_END();
-                  return;
+                  break;
                }
              device_user_data->dev = dev;
              device_user_data->dev_mgr_res = dev_mgr_res;
@@ -1147,6 +1147,9 @@ _e_input_devmgr_create_keyboard_device(struct wl_client *client, const char *dev
    return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NONE;
 
 fail_create_device:
+   EINA_LIST_FREE(device->clients, cdata)
+     E_FREE(cdata);
+   E_FREE(device);
    return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NO_SYSTEM_RESOURCES;
 }
 
@@ -1213,6 +1216,9 @@ _e_input_devmgr_create_mouse_device(struct wl_client *client, const char *device
    return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NONE;
 
 fail_create_device:
+   EINA_LIST_FREE(device->clients, cdata)
+     E_FREE(cdata);
+   E_FREE(device);
    return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NO_SYSTEM_RESOURCES;
 }
 
@@ -1279,6 +1285,9 @@ _e_input_devmgr_create_touch_device(struct wl_client *client, const char *device
    return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NONE;
 
 fail_create_device:
+   EINA_LIST_FREE(device->clients, cdata)
+     E_FREE(cdata);
+   E_FREE(device);
    return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NO_SYSTEM_RESOURCES;
 }
 
@@ -1594,7 +1603,7 @@ _e_input_devmgr_generate_pointer_move_event(int x, int y, char *identifier)
 
    DMERR("Try\n");
 
-   e = calloc(1, sizeof(Ecore_Event_Mouse_Button));
+   e = calloc(1, sizeof(Ecore_Event_Mouse_Move));
    if (!e) return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NO_SYSTEM_RESOURCES;
 
    e->window = e_comp->win;
@@ -1726,7 +1735,7 @@ _e_input_devmgr_generate_touch_update_event(uint32_t x, uint32_t y, uint32_t fin
 {
    Ecore_Event_Mouse_Move *e;
 
-   e = calloc(1, sizeof(Ecore_Event_Mouse_Button));
+   e = calloc(1, sizeof(Ecore_Event_Mouse_Move));
    if (!e) return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NO_SYSTEM_RESOURCES;
 
    e->window = e_comp->win;
