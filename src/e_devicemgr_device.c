@@ -1553,9 +1553,9 @@ _e_input_devmgr_generate_pointer_event(Eina_Bool state, int x, int y, int button
    e = calloc(1, sizeof(Ecore_Event_Mouse_Button));
    if (!e) return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NO_SYSTEM_RESOURCES;
 
-   e->window = e_comp->win;
-   e->event_window = e->window;
-   e->root_window = e_comp->root;
+   e->window = e_comp->ee_win;
+   e->event_window = e_comp->ee_win;
+   e->root_window = e_comp->ee_win;
    e->timestamp = (int)(ecore_time_get() * 1000);
    e->same_screen = 1;
 
@@ -1606,9 +1606,9 @@ _e_input_devmgr_generate_pointer_move_event(int x, int y, char *identifier)
    e = calloc(1, sizeof(Ecore_Event_Mouse_Move));
    if (!e) return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NO_SYSTEM_RESOURCES;
 
-   e->window = e_comp->win;
-   e->event_window = e->window;
-   e->root_window = e_comp->root;
+   e->window = e_comp->ee_win;
+   e->event_window = e_comp->ee_win;
+   e->root_window = e_comp->ee_win;
    e->timestamp = (int)(ecore_time_get() * 1000);
    e->same_screen = 1;
 
@@ -1695,9 +1695,9 @@ _e_input_devmgr_generate_touch_event(uint32_t type, uint32_t x, uint32_t y, uint
    e = calloc(1, sizeof(Ecore_Event_Mouse_Button));
    if (!e) return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NO_SYSTEM_RESOURCES;
 
-   e->window = e_comp->win;
-   e->event_window = e->window;
-   e->root_window = e_comp->root;
+   e->window = e_comp->ee_win;
+   e->event_window = e_comp->ee_win;
+   e->root_window = e_comp->ee_win;
    e->timestamp = (int)(ecore_time_get() * 1000);
    e->same_screen = 1;
 
@@ -1738,9 +1738,9 @@ _e_input_devmgr_generate_touch_update_event(uint32_t x, uint32_t y, uint32_t fin
    e = calloc(1, sizeof(Ecore_Event_Mouse_Move));
    if (!e) return TIZEN_INPUT_DEVICE_MANAGER_ERROR_NO_SYSTEM_RESOURCES;
 
-   e->window = e_comp->win;
-   e->event_window = e->window;
-   e->root_window = e_comp->root;
+   e->window = e_comp->ee_win;
+   e->event_window = e_comp->ee_win;
+   e->root_window = e_comp->ee_win;
    e->timestamp = (int)(ecore_time_get() * 1000);
    e->same_screen = 1;
 

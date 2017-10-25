@@ -44,6 +44,11 @@ _e_devicemgr_input_pointer_mouse_remap(int type, void *event)
    ev_key->compose = (char *)eina_stringshare_add(ev_key->key);
    ev_key->timestamp = (int)(ecore_time_get()*1000);
    ev_key->same_screen = 1;
+
+   ev_key->window = e_comp->ee_win;
+   ev_key->event_window = e_comp->ee_win;
+   ev_key->root_window = e_comp->ee_win;
+
    ev_key->keycode = dconfig->conf->input.back_keycode;
 
    if (type == ECORE_EVENT_MOUSE_BUTTON_DOWN)
