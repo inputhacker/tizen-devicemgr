@@ -358,7 +358,7 @@ _e_devicemgr_add_device(const char *name, const char *identifier, const char *se
 static Eina_Bool
 _cb_device_add(void *data EINA_UNUSED, int type EINA_UNUSED, void *event)
 {
-   Ecore_Event_Device_Info *e;
+   E_Input_Event_Input_Device_Add *e;
 
    if (!(e = event)) return ECORE_CALLBACK_PASS_ON;
 
@@ -370,7 +370,7 @@ _cb_device_add(void *data EINA_UNUSED, int type EINA_UNUSED, void *event)
 static Eina_Bool
 _cb_device_del(void *data EINA_UNUSED, int type EINA_UNUSED, void *event)
 {
-   Ecore_Event_Device_Info *e;
+   E_Input_Event_Input_Device_Del *e;
 
    if(!(e = event)) return ECORE_CALLBACK_PASS_ON;
 
@@ -597,26 +597,19 @@ e_devicemgr_is_detent_device(const char *name)
 Eina_Bool
 e_devicemgr_check_detent_device_add(int type, void *event)
 {
-   Ecore_Event_Device_Info *e_device_info = NULL;
    E_Input_Event_Input_Device_Add *e_device_add = NULL;
 
-   if ((ECORE_EVENT_DEVICE_ADD == type) ||
-       (ECORE_EVENT_DEVICE_DEL == type))
-     {
-        e_device_info = (Ecore_Event_Device_Info *)event;
-
-        /* Remove mouse class from tizen detent device */
-        if (e_devicemgr_is_detent_device(e_device_info->name))
-          e_device_info->clas &= ~ECORE_DEVICE_CLASS_MOUSE;
-     }
-   else if ((E_INPUT_EVENT_INPUT_DEVICE_ADD == type) ||
+   if ((E_INPUT_EVENT_INPUT_DEVICE_ADD == type) ||
             (E_INPUT_EVENT_INPUT_DEVICE_DEL == type))
      {
         e_device_add = (E_Input_Event_Input_Device_Add *)event;
 
         /* Remove pointer capability from tizen detent device */
         if (e_devicemgr_is_detent_device(e_device_add->name))
-          e_device_add->caps &= ~E_INPUT_SEAT_POINTER;
+          {
+             e_device_add->caps &= ~E_INPUT_SEAT_POINTER;
+             e_device_add->clas &= ~ECORE_DEVICE_CLASS_MOUSE;
+          }
      }
 
    return ECORE_CALLBACK_PASS_ON;
@@ -2115,8 +2108,8 @@ e_devicemgr_device_init(void)
    e_comp_wl->input_device_manager.resources = NULL;
    e_comp_wl->input_device_manager.device_list = NULL;
 
-   E_LIST_HANDLER_APPEND(handlers, ECORE_EVENT_DEVICE_ADD, _cb_device_add, NULL);
-   E_LIST_HANDLER_APPEND(handlers, ECORE_EVENT_DEVICE_DEL, _cb_device_del, NULL);
+   E_LIST_HANDLER_APPEND(handlers, E_INPUT_EVENT_INPUT_DEVICE_ADD, _cb_device_add, NULL);
+   E_LIST_HANDLER_APPEND(handlers, E_INPUT_EVENT_INPUT_DEVICE_DEL, _cb_device_del, NULL);
 
    input_devmgr_data = E_NEW(e_devicemgr_input_devmgr_data, 1);
    EINA_SAFETY_ON_NULL_RETURN_VAL(input_devmgr_data, 0);
