@@ -2042,6 +2042,27 @@ e_devicemgr_create_virtual_device(E_Devicemgr_Device_Type type, const char *name
        ioctl(uinp_fd, UI_SET_ABSBIT, ABS_MT_POSITION_Y);
        ioctl(uinp_fd, UI_SET_ABSBIT, ABS_MT_TRACKING_ID);
        ioctl(uinp_fd, UI_SET_MSCBIT, MSC_SCAN);
+
+       uinp.absmin[ABS_X] = 0;
+       uinp.absmax[ABS_X] = 1000;
+       uinp.absmin[ABS_Y] = 0;
+       uinp.absmax[ABS_Y] = 1000;
+       uinp.absmin[ABS_MT_SLOT] = 0;
+       uinp.absmax[ABS_MT_SLOT] = 9;
+       uinp.absmin[ABS_MT_TOUCH_MAJOR] = 0;
+       uinp.absmax[ABS_MT_TOUCH_MAJOR] = 255;
+       uinp.absmin[ABS_MT_TOUCH_MINOR] = 0;
+       uinp.absmax[ABS_MT_TOUCH_MINOR] = 255;
+       uinp.absmin[ABS_MT_WIDTH_MAJOR] = 0;
+       uinp.absmax[ABS_MT_WIDTH_MAJOR] = 255;
+       uinp.absmin[ABS_MT_POSITION_X] = 0;
+       uinp.absmax[ABS_MT_POSITION_X] = 1000;
+       uinp.absmin[ABS_MT_POSITION_Y] = 0;
+       uinp.absmax[ABS_MT_POSITION_Y] = 1000;
+       uinp.absmin[ABS_MT_TRACKING_ID] = 0;
+       uinp.absmax[ABS_MT_TRACKING_ID] = 65535;
+       uinp.absmin[ABS_MT_ORIENTATION] = 0;
+       uinp.absmax[ABS_MT_ORIENTATION] = 2;
      }
    else
      goto fail_create_device;
