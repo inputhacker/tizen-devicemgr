@@ -1931,7 +1931,7 @@ _e_devicemgr_device_mgr_cb_bind(struct wl_client *client, void *data, uint32_t v
 
         EINA_LIST_FOREACH(e_comp_wl->input_device_manager.device_list, l, dev)
           {
-             device_res = wl_resource_create(client, &tizen_input_device_interface, 3, 0);
+             device_res = wl_resource_create(client, &tizen_input_device_interface, 1, 0);
              if (!device_res)
                {
                   DMERR("Could not create tizen_input_device resource: %m");
