@@ -1379,12 +1379,15 @@ _e_input_devmgr_cb_deinit_generator(struct wl_client *client, struct wl_resource
 
    EINA_LIST_FOREACH_SAFE(input_devmgr_data->watched_clients, l, l_next, data)
      {
-        if (data->client == client && !data->clas)
+        if (data && data->client == client && !data->clas)
           {
              listener = wl_client_get_destroy_listener(client,
                         _e_input_devmgr_inputgen_client_cb_destroy);
-             wl_list_remove(&listener->link);
-             E_FREE(listener);
+             if (listener)
+               {
+                  wl_list_remove(&listener->link);
+                  E_FREE(listener);
+               }
 
              input_devmgr_data->watched_clients =
                 eina_list_remove_list(input_devmgr_data->watched_clients, l);
