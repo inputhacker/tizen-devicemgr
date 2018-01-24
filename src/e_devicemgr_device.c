@@ -915,12 +915,25 @@ _e_input_devmgr_inputgen_client_cb_destroy(struct wl_listener *l, void *data)
    e_devicemgr_inputgen_client_data *cdata;
    e_devicemgr_inputgen_device_data *ddata;
    e_devicemgr_inputgen_resource_data *rdata;
+   e_devicemgr_inputgen_client_global_data *gdata;
    Eina_List *list, *l_next, *list2, *l_next2;
 
    EINA_SAFETY_ON_NULL_RETURN(l);
 
    wl_list_remove(&l->link);
    E_FREE(l);
+
+   EINA_LIST_FOREACH_SAFE(input_devmgr_data->watched_clients, list, l_next, gdata)
+     {
+        if (gdata->client == client)
+          {
+             input_devmgr_data->watched_clients =
+                eina_list_remove_list(input_devmgr_data->watched_clients, list);
+             E_FREE(gdata);
+
+             break;
+          }
+     }
 
    EINA_LIST_FOREACH_SAFE(input_devmgr_data->inputgen.kbd_list, list, l_next, ddata)
      {
