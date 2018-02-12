@@ -4,6 +4,7 @@
 #include "e.h"
 #define LOG_TAG "DEVICEMGR"
 #include "dlog.h"
+#include "e_devicemgr.h"
 
 extern int _log_dom;
 #undef ERR

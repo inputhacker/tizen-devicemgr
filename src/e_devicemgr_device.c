@@ -560,6 +560,11 @@ _e_devicemgr_send_detent_event(int detent)
    wl_fixed_t f_value;
    E_Client *ec;
 
+   if (!e_devicemgr_intercept_hook_call(E_DEVICEMGR_INTERCEPT_HOOK_DETENT, &detent))
+     {
+        return;
+     }
+
    ec = e_client_focused_get();
 
    if (!ec) return;
