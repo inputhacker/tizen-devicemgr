@@ -91,7 +91,7 @@ static const struct tizen_input_device_interface _e_devicemgr_device_interface =
 };
 
 static void
-_e_devicemgr_del_device(const char *name, const char *identifier, const char *seatname, Evas_Device_Class clas, Evas_Device_Subclass subclas)
+_e_devicemgr_del_device(const char *name, const char *identifier, const char *seatname, Ecore_Device_Class clas, Ecore_Device_Subclass subclas)
 {
    E_Comp_Wl_Input_Device *dev;
    struct wl_client *wc;
@@ -202,7 +202,7 @@ _e_devicemgr_device_cb_device_unbind(struct wl_resource *resource)
 }
 
 static void
-_e_devicemgr_add_device(const char *name, const char *identifier, const char *seatname, Evas_Device_Class clas, Evas_Device_Subclass subclas)
+_e_devicemgr_add_device(const char *name, const char *identifier, const char *seatname, Ecore_Device_Class clas, Ecore_Device_Subclass subclas)
 {
    E_Comp_Wl_Input_Device *dev;
    struct wl_client *wc;
@@ -280,7 +280,7 @@ _e_devicemgr_add_device(const char *name, const char *identifier, const char *se
 
    e_comp_wl->input_device_manager.device_list = eina_list_append(e_comp_wl->input_device_manager.device_list, dev);
 
-   if (dev->clas == EVAS_DEVICE_CLASS_KEYBOARD)
+   if (dev->clas == ECORE_DEVICE_CLASS_KEYBOARD)
      {
         EINA_LIST_FOREACH(input_devmgr_data->inputgen.kbd_list, l, ddata)
           {
@@ -293,7 +293,7 @@ _e_devicemgr_add_device(const char *name, const char *identifier, const char *se
                }
           }
      }
-   else if (dev->clas == EVAS_DEVICE_CLASS_MOUSE)
+   else if (dev->clas == ECORE_DEVICE_CLASS_MOUSE)
      {
         EINA_LIST_FOREACH(input_devmgr_data->inputgen.ptr_list, l, ddata)
           {
@@ -306,7 +306,7 @@ _e_devicemgr_add_device(const char *name, const char *identifier, const char *se
                }
           }
      }
-   else if (dev->clas == EVAS_DEVICE_CLASS_TOUCH)
+   else if (dev->clas == ECORE_DEVICE_CLASS_TOUCH)
      {
         EINA_LIST_FOREACH(input_devmgr_data->inputgen.touch_list, l, ddata)
           {
@@ -341,15 +341,15 @@ _e_devicemgr_add_device(const char *name, const char *identifier, const char *se
           }
      }
 
-   if (dev->clas == EVAS_DEVICE_CLASS_MOUSE)
+   if (dev->clas == ECORE_DEVICE_CLASS_MOUSE)
      e_comp_wl->input_device_manager.last_device_ptr = dev;
 
    if (!e_comp_wl->input_device_manager.last_device_touch &&
-       dev->clas == EVAS_DEVICE_CLASS_TOUCH)
+       dev->clas == ECORE_DEVICE_CLASS_TOUCH)
      e_comp_wl->input_device_manager.last_device_touch = dev;
 
    if (!e_comp_wl->input_device_manager.last_device_kbd &&
-       dev->clas == EVAS_DEVICE_CLASS_KEYBOARD)
+       dev->clas == ECORE_DEVICE_CLASS_KEYBOARD)
      e_comp_wl->input_device_manager.last_device_kbd = dev;
 
    TRACE_INPUT_END();
@@ -358,7 +358,7 @@ _e_devicemgr_add_device(const char *name, const char *identifier, const char *se
 static Eina_Bool
 _cb_device_add(void *data EINA_UNUSED, int type EINA_UNUSED, void *event)
 {
-   E_Input_Event_Input_Device_Add *e;
+   Ecore_Event_Device_Info *e;
 
    if (!(e = event)) return ECORE_CALLBACK_PASS_ON;
 
@@ -370,7 +370,7 @@ _cb_device_add(void *data EINA_UNUSED, int type EINA_UNUSED, void *event)
 static Eina_Bool
 _cb_device_del(void *data EINA_UNUSED, int type EINA_UNUSED, void *event)
 {
-   E_Input_Event_Input_Device_Del *e;
+   Ecore_Event_Device_Info *e;
 
    if(!(e = event)) return ECORE_CALLBACK_PASS_ON;
 
@@ -383,14 +383,14 @@ static Eina_Bool
 _e_devicemgr_block_check_button(int type, void *event)
 {
    Ecore_Event_Mouse_Button *ev;
-   Evas_Device *dev;
+   Ecore_Device *dev;
 
    ev = event;
    EINA_SAFETY_ON_NULL_RETURN_VAL(ev, ECORE_CALLBACK_PASS_ON);
    dev = ev->dev;
    EINA_SAFETY_ON_NULL_RETURN_VAL(dev, ECORE_CALLBACK_PASS_ON);
 
-   if (evas_device_class_get(dev) == EVAS_DEVICE_CLASS_MOUSE)
+   if (ecore_device_class_get(dev) == ECORE_DEVICE_CLASS_MOUSE)
      {
         if (input_devmgr_data->block_devtype & TIZEN_INPUT_DEVICE_MANAGER_CLAS_MOUSE)
           {
@@ -414,7 +414,7 @@ _e_devicemgr_block_check_button(int type, void *event)
              input_devmgr_data->pressed_button &= ~(1 << ev->buttons);
           }
      }
-   else if (evas_device_class_get(dev) == EVAS_DEVICE_CLASS_TOUCH)
+   else if (ecore_device_class_get(dev) == ECORE_DEVICE_CLASS_TOUCH)
      {
         if (input_devmgr_data->block_devtype & TIZEN_INPUT_DEVICE_MANAGER_CLAS_TOUCHSCREEN)
           {
@@ -446,21 +446,21 @@ static Eina_Bool
 _e_devicemgr_block_check_move(int type, void *event)
 {
    Ecore_Event_Mouse_Move *ev;
-   Evas_Device *dev;
+   Ecore_Device *dev;
 
    ev = event;
    EINA_SAFETY_ON_NULL_RETURN_VAL(ev, ECORE_CALLBACK_PASS_ON);
    dev = ev->dev;
    EINA_SAFETY_ON_NULL_RETURN_VAL(dev, ECORE_CALLBACK_PASS_ON);
 
-   if (evas_device_class_get(dev) == EVAS_DEVICE_CLASS_MOUSE)
+   if (ecore_device_class_get(dev) == ECORE_DEVICE_CLASS_MOUSE)
      {
         if (input_devmgr_data->block_devtype & TIZEN_INPUT_DEVICE_MANAGER_CLAS_MOUSE)
           {
              return ECORE_CALLBACK_DONE;
           }
      }
-   else if (evas_device_class_get(dev) == EVAS_DEVICE_CLASS_TOUCH)
+   else if (ecore_device_class_get(dev) == ECORE_DEVICE_CLASS_TOUCH)
      {
         if (input_devmgr_data->block_devtype & TIZEN_INPUT_DEVICE_MANAGER_CLAS_TOUCHSCREEN)
           {
@@ -597,19 +597,26 @@ e_devicemgr_is_detent_device(const char *name)
 Eina_Bool
 e_devicemgr_check_detent_device_add(int type, void *event)
 {
+   Ecore_Event_Device_Info *e_device_info = NULL;
    E_Input_Event_Input_Device_Add *e_device_add = NULL;
 
-   if ((E_INPUT_EVENT_INPUT_DEVICE_ADD == type) ||
+   if ((ECORE_EVENT_DEVICE_ADD == type) ||
+       (ECORE_EVENT_DEVICE_DEL == type))
+     {
+        e_device_info = (Ecore_Event_Device_Info *)event;
+
+        /* Remove mouse class from tizen detent device */
+        if (e_devicemgr_is_detent_device(e_device_info->name))
+          e_device_info->clas &= ~ECORE_DEVICE_CLASS_MOUSE;
+     }
+   else if ((E_INPUT_EVENT_INPUT_DEVICE_ADD == type) ||
             (E_INPUT_EVENT_INPUT_DEVICE_DEL == type))
      {
         e_device_add = (E_Input_Event_Input_Device_Add *)event;
 
         /* Remove pointer capability from tizen detent device */
         if (e_devicemgr_is_detent_device(e_device_add->name))
-          {
-             e_device_add->caps &= ~E_INPUT_SEAT_POINTER;
-             e_device_add->clas &= ~EVAS_DEVICE_CLASS_MOUSE;
-          }
+          e_device_add->caps &= ~E_INPUT_SEAT_POINTER;
      }
 
    return ECORE_CALLBACK_PASS_ON;
@@ -621,7 +628,7 @@ e_devicemgr_detent_check(int type, void *event)
 {
    int detent;
    const char *name;
-   Evas_Device *dev = NULL;
+   Ecore_Device *dev = NULL;
    Ecore_Event_Mouse_Wheel *ev = NULL;
 
    EINA_SAFETY_ON_NULL_RETURN_VAL(event, ECORE_CALLBACK_PASS_ON);
@@ -640,7 +647,7 @@ e_devicemgr_detent_check(int type, void *event)
 
    EINA_SAFETY_ON_NULL_RETURN_VAL(dev, ECORE_CALLBACK_PASS_ON);
 
-   name = evas_device_name_get(dev);
+   name = ecore_device_name_get(dev);
    EINA_SAFETY_ON_NULL_RETURN_VAL(name, ECORE_CALLBACK_PASS_ON);
 
    if (e_devicemgr_is_detent_device(name))
@@ -1420,6 +1427,8 @@ _e_input_devmgr_keyevent_free(void *data EINA_UNUSED, void *ev)
    eina_stringshare_del(e->key);
    eina_stringshare_del(e->compose);
 
+   if (e->dev) ecore_device_unref(e->dev);
+
    free(e);
 }
 
@@ -1451,7 +1460,7 @@ _e_input_devmgr_generate_key_event(const char *key, Eina_Bool pressed, char *ide
    e->data = NULL;
 
    e->modifiers = 0;
-   e->dev = e_input_evdev_get_evas_device(identifier, EVAS_DEVICE_CLASS_KEYBOARD);
+   e->dev = ecore_device_ref(e_input_evdev_get_ecore_device(identifier, ECORE_DEVICE_CLASS_KEYBOARD));
 
    DMDBG("Generate key event: key: %s, keycode: %d, iden: %s\n", e->key, e->keycode, identifier);
 
@@ -1551,6 +1560,8 @@ _e_input_devmgr_mouse_button_event_free(void *data EINA_UNUSED, void *ev)
 {
    Ecore_Event_Mouse_Button *e = ev;
 
+   if (e->dev) ecore_device_unref(e->dev);
+
    free(e);
 }
 
@@ -1584,7 +1595,7 @@ _e_input_devmgr_generate_pointer_event(Eina_Bool state, int x, int y, int button
    e->multi.y = e->y;
    e->multi.root.x = e->x;
    e->multi.root.y = e->y;
-   e->dev = e_input_evdev_get_evas_device(identifier, EVAS_DEVICE_CLASS_MOUSE);
+   e->dev = ecore_device_ref(e_input_evdev_get_ecore_device(identifier, ECORE_DEVICE_CLASS_MOUSE));
    e->buttons = buttons;
 
    DMDBG("Generate mouse button event: button: %d (state: %d)\n", buttons, state);
@@ -1601,6 +1612,8 @@ static void
 _e_input_devmgr_mouse_move_event_free(void *data EINA_UNUSED, void *ev)
 {
    Ecore_Event_Mouse_Move *e = ev;
+
+   if (e->dev) ecore_device_unref(e->dev);
 
    free(e);
 }
@@ -1637,7 +1650,7 @@ _e_input_devmgr_generate_pointer_move_event(int x, int y, char *identifier)
    e->multi.y = e->y;
    e->multi.root.x = e->x;
    e->multi.root.y = e->y;
-   e->dev = e_input_evdev_get_evas_device(identifier, EVAS_DEVICE_CLASS_MOUSE);
+   e->dev = ecore_device_ref(e_input_evdev_get_ecore_device(identifier, ECORE_DEVICE_CLASS_MOUSE));
 
    DMDBG("Generate mouse move event: (%d, %d)\n", e->x, e->y);
 
@@ -1726,7 +1739,7 @@ _e_input_devmgr_generate_touch_event(uint32_t type, uint32_t x, uint32_t y, uint
    e->multi.y = e->y;
    e->multi.root.x = e->x;
    e->multi.root.y = e->y;
-   e->dev = e_input_evdev_get_evas_device(identifier, EVAS_DEVICE_CLASS_TOUCH);
+   e->dev = ecore_device_ref(e_input_evdev_get_ecore_device(identifier, ECORE_DEVICE_CLASS_TOUCH));
    e->buttons = 1;
 
    DMDBG("Generate touch event: device: %d (%d, %d)\n", e->multi.device, e->x, e->y);
@@ -1769,7 +1782,7 @@ _e_input_devmgr_generate_touch_update_event(uint32_t x, uint32_t y, uint32_t fin
    e->multi.y = e->y;
    e->multi.root.x = e->x;
    e->multi.root.y = e->y;
-   e->dev = e_input_evdev_get_evas_device(identifier, EVAS_DEVICE_CLASS_TOUCH);
+   e->dev = ecore_device_ref(e_input_evdev_get_ecore_device(identifier, ECORE_DEVICE_CLASS_TOUCH));
 
    DMDBG("Generate touch move event: device: %d (%d, %d)\n", e->multi.device, e->x, e->y);
 
@@ -2108,8 +2121,8 @@ e_devicemgr_device_init(void)
    e_comp_wl->input_device_manager.resources = NULL;
    e_comp_wl->input_device_manager.device_list = NULL;
 
-   E_LIST_HANDLER_APPEND(handlers, E_INPUT_EVENT_INPUT_DEVICE_ADD, _cb_device_add, NULL);
-   E_LIST_HANDLER_APPEND(handlers, E_INPUT_EVENT_INPUT_DEVICE_DEL, _cb_device_del, NULL);
+   E_LIST_HANDLER_APPEND(handlers, ECORE_EVENT_DEVICE_ADD, _cb_device_add, NULL);
+   E_LIST_HANDLER_APPEND(handlers, ECORE_EVENT_DEVICE_DEL, _cb_device_del, NULL);
 
    input_devmgr_data = E_NEW(e_devicemgr_input_devmgr_data, 1);
    EINA_SAFETY_ON_NULL_RETURN_VAL(input_devmgr_data, 0);
