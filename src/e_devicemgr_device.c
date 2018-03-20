@@ -1982,9 +1982,15 @@ _e_devicemgr_device_mgr_cb_bind(struct wl_client *client, void *data, uint32_t v
 void
 e_devicemgr_destroy_virtual_device(int uinp_fd)
 {
-   ioctl(uinp_fd, UI_DEV_DESTROY, NULL);
+   int ret;
+   ret = ioctl(uinp_fd, UI_DEV_DESTROY, NULL);
+   if (ret) DMWRN("Failed destroy fd: %d (ret: %d)\n", uinp_fd, ret);
    close(uinp_fd);
 }
+
+#define DM_IOCTL_SET_BIT(fd, bit, val) \
+    ret = ioctl(fd, bit, val); \
+    if (ret) DMWRN("Failed to set %s to fd(%d) (ret: %d)\n", #val, fd, ret)
 
 int
 e_devicemgr_create_virtual_device(E_Devicemgr_Device_Type type, const char *name)
@@ -2008,46 +2014,46 @@ e_devicemgr_create_virtual_device(E_Devicemgr_Device_Type type, const char *name
    if (E_DEVICEMGR_DEVICE_TYPE_KEY == type)
      {
        /* key device setup */
-       ioctl(uinp_fd, UI_SET_EVBIT, EV_KEY);
-       ioctl(uinp_fd, UI_SET_EVBIT, EV_SYN);
-       ioctl(uinp_fd, UI_SET_EVBIT, EV_MSC);
-       ioctl(uinp_fd, UI_SET_MSCBIT, MSC_SCAN);
-       ioctl(uinp_fd, UI_SET_KEYBIT, KEY_ESC);
+       DM_IOCTL_SET_BIT(uinp_fd, UI_SET_EVBIT, EV_KEY);
+       DM_IOCTL_SET_BIT(uinp_fd, UI_SET_EVBIT, EV_SYN);
+       DM_IOCTL_SET_BIT(uinp_fd, UI_SET_EVBIT, EV_MSC);
+       DM_IOCTL_SET_BIT(uinp_fd, UI_SET_MSCBIT, MSC_SCAN);
+       DM_IOCTL_SET_BIT(uinp_fd, UI_SET_KEYBIT, KEY_ESC);
      }
    else if (E_DEVICEMGR_DEVICE_TYPE_MOUSE == type)
      {
        /* mouse device setup */
-       ioctl(uinp_fd, UI_SET_EVBIT, EV_KEY);
-       ioctl(uinp_fd, UI_SET_EVBIT, EV_SYN);
-       ioctl(uinp_fd, UI_SET_EVBIT, EV_MSC);
-       ioctl(uinp_fd, UI_SET_EVBIT, EV_REL);
-       ioctl(uinp_fd, UI_SET_MSCBIT, MSC_SCAN);
-       ioctl(uinp_fd, UI_SET_KEYBIT, BTN_LEFT);
-       ioctl(uinp_fd, UI_SET_RELBIT, BTN_RIGHT);
-       ioctl(uinp_fd, UI_SET_RELBIT, BTN_MIDDLE);
-       ioctl(uinp_fd, UI_SET_RELBIT, REL_X);
-       ioctl(uinp_fd, UI_SET_RELBIT, REL_Y);
-       ioctl(uinp_fd, UI_SET_RELBIT, REL_WHEEL);
+       DM_IOCTL_SET_BIT(uinp_fd, UI_SET_EVBIT, EV_KEY);
+       DM_IOCTL_SET_BIT(uinp_fd, UI_SET_EVBIT, EV_SYN);
+       DM_IOCTL_SET_BIT(uinp_fd, UI_SET_EVBIT, EV_MSC);
+       DM_IOCTL_SET_BIT(uinp_fd, UI_SET_EVBIT, EV_REL);
+       DM_IOCTL_SET_BIT(uinp_fd, UI_SET_MSCBIT, MSC_SCAN);
+       DM_IOCTL_SET_BIT(uinp_fd, UI_SET_KEYBIT, BTN_LEFT);
+       DM_IOCTL_SET_BIT(uinp_fd, UI_SET_RELBIT, BTN_RIGHT);
+       DM_IOCTL_SET_BIT(uinp_fd, UI_SET_RELBIT, BTN_MIDDLE);
+       DM_IOCTL_SET_BIT(uinp_fd, UI_SET_RELBIT, REL_X);
+       DM_IOCTL_SET_BIT(uinp_fd, UI_SET_RELBIT, REL_Y);
+       DM_IOCTL_SET_BIT(uinp_fd, UI_SET_RELBIT, REL_WHEEL);
      }
    else if (E_DEVICEMGR_DEVICE_TYPE_TOUCH == type)
      {
        /* touch device setup */
-       ioctl(uinp_fd, UI_SET_EVBIT, EV_KEY);
-       ioctl(uinp_fd, UI_SET_EVBIT, EV_SYN);
-       ioctl(uinp_fd, UI_SET_EVBIT, EV_MSC);
-       ioctl(uinp_fd, UI_SET_EVBIT, EV_ABS);
+       DM_IOCTL_SET_BIT(uinp_fd, UI_SET_EVBIT, EV_KEY);
+       DM_IOCTL_SET_BIT(uinp_fd, UI_SET_EVBIT, EV_SYN);
+       DM_IOCTL_SET_BIT(uinp_fd, UI_SET_EVBIT, EV_MSC);
+       DM_IOCTL_SET_BIT(uinp_fd, UI_SET_EVBIT, EV_ABS);
 
-       ioctl(uinp_fd, UI_SET_KEYBIT, BTN_TOUCH);
-       ioctl(uinp_fd, UI_SET_ABSBIT, ABS_X);
-       ioctl(uinp_fd, UI_SET_ABSBIT, ABS_Y);
-       ioctl(uinp_fd, UI_SET_ABSBIT, ABS_MT_SLOT);
-       ioctl(uinp_fd, UI_SET_ABSBIT, ABS_MT_TOUCH_MAJOR);
-       ioctl(uinp_fd, UI_SET_ABSBIT, ABS_MT_TOUCH_MINOR);
-       ioctl(uinp_fd, UI_SET_ABSBIT, ABS_MT_WIDTH_MAJOR);
-       ioctl(uinp_fd, UI_SET_ABSBIT, ABS_MT_POSITION_X);
-       ioctl(uinp_fd, UI_SET_ABSBIT, ABS_MT_POSITION_Y);
-       ioctl(uinp_fd, UI_SET_ABSBIT, ABS_MT_TRACKING_ID);
-       ioctl(uinp_fd, UI_SET_MSCBIT, MSC_SCAN);
+       DM_IOCTL_SET_BIT(uinp_fd, UI_SET_KEYBIT, BTN_TOUCH);
+       DM_IOCTL_SET_BIT(uinp_fd, UI_SET_ABSBIT, ABS_X);
+       DM_IOCTL_SET_BIT(uinp_fd, UI_SET_ABSBIT, ABS_Y);
+       DM_IOCTL_SET_BIT(uinp_fd, UI_SET_ABSBIT, ABS_MT_SLOT);
+       DM_IOCTL_SET_BIT(uinp_fd, UI_SET_ABSBIT, ABS_MT_TOUCH_MAJOR);
+       DM_IOCTL_SET_BIT(uinp_fd, UI_SET_ABSBIT, ABS_MT_TOUCH_MINOR);
+       DM_IOCTL_SET_BIT(uinp_fd, UI_SET_ABSBIT, ABS_MT_WIDTH_MAJOR);
+       DM_IOCTL_SET_BIT(uinp_fd, UI_SET_ABSBIT, ABS_MT_POSITION_X);
+       DM_IOCTL_SET_BIT(uinp_fd, UI_SET_ABSBIT, ABS_MT_POSITION_Y);
+       DM_IOCTL_SET_BIT(uinp_fd, UI_SET_ABSBIT, ABS_MT_TRACKING_ID);
+       DM_IOCTL_SET_BIT(uinp_fd, UI_SET_MSCBIT, MSC_SCAN);
 
        uinp.absmin[ABS_X] = 0;
        uinp.absmax[ABS_X] = 1000;
