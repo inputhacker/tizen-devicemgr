@@ -37,6 +37,7 @@ e_modapi_init(E_Module *m)
         SLOG(LOG_DEBUG, "DEVICEMGR", "[e_devicemgr][%s] Failed @ eina_log_domain_register()..!\n", __FUNCTION__);
         return NULL;
      }
+   eina_log_domain_level_set("e-devicemgr", EINA_LOG_LEVEL_INFO);
 
    dconfig = E_NEW(E_Devicemgr_Config_Data, 1);
    if (!dconfig)
