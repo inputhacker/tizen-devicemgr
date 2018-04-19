@@ -19,6 +19,7 @@ _e_devicemgr_input_keyevent_free(void *data EINA_UNUSED, void *ev)
    eina_stringshare_del(e->key);
    eina_stringshare_del(e->compose);
 
+   E_FREE(e->data);
    E_FREE(e);
 }
 
@@ -27,6 +28,7 @@ _e_devicemgr_input_pointer_mouse_remap(int type, void *event)
 {
    Ecore_Event_Key *ev_key;
    Ecore_Event_Mouse_Button *ev;
+   E_Keyrouter_Event_Data *key_data;
 
    if (type == ECORE_EVENT_MOUSE_MOVE) return ECORE_CALLBACK_PASS_ON;
    EINA_SAFETY_ON_NULL_RETURN_VAL(e_comp_wl->xkb.keymap, ECORE_CALLBACK_PASS_ON);
@@ -39,6 +41,9 @@ _e_devicemgr_input_pointer_mouse_remap(int type, void *event)
    ev_key = E_NEW(Ecore_Event_Key, 1);
    EINA_SAFETY_ON_NULL_RETURN_VAL(ev_key, ECORE_CALLBACK_PASS_ON);
 
+   key_data = E_NEW(E_Keyrouter_Event_Data, 1);
+   EINA_SAFETY_ON_NULL_GOTO(key_data, failed);
+
    ev_key->key = (char *)eina_stringshare_add("XF86Back");
    ev_key->keyname = (char *)eina_stringshare_add(ev_key->key);
    ev_key->compose = (char *)eina_stringshare_add(ev_key->key);
@@ -50,6 +55,7 @@ _e_devicemgr_input_pointer_mouse_remap(int type, void *event)
    ev_key->root_window = e_comp->ee_win;
 
    ev_key->keycode = dconfig->conf->input.back_keycode;
+   ev_key->data = key_data;
 
    if (type == ECORE_EVENT_MOUSE_BUTTON_DOWN)
      ecore_event_add(ECORE_EVENT_KEY_DOWN, ev_key, _e_devicemgr_input_keyevent_free, NULL);
@@ -57,6 +63,10 @@ _e_devicemgr_input_pointer_mouse_remap(int type, void *event)
      ecore_event_add(ECORE_EVENT_KEY_UP, ev_key, _e_devicemgr_input_keyevent_free, NULL);
 
    return ECORE_CALLBACK_DONE;
+
+failed:
+   E_FREE(ev_key);
+   return ECORE_CALLBACK_PASS_ON;
 }
 
 static Eina_Bool
