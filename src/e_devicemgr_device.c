@@ -2103,6 +2103,23 @@ fail_create_device:
    return -1;
 }
 
+static void
+_e_devicemgr_device_query(void)
+{
+   Eina_List *list, *l;
+   Ecore_Device *dev;
+
+   list = (Eina_List *)ecore_device_list();
+
+   EINA_LIST_FOREACH(list, l, dev)
+     {
+        _e_devicemgr_add_device(ecore_device_name_get(dev),
+                                ecore_device_identifier_get(dev),
+                                ecore_device_name_get(dev),
+                                ecore_device_class_get(dev),
+                                ecore_device_subclass_get(dev));
+     }
+}
 
 int
 e_devicemgr_device_init(void)
@@ -2127,13 +2144,15 @@ e_devicemgr_device_init(void)
    e_comp_wl->input_device_manager.resources = NULL;
    e_comp_wl->input_device_manager.device_list = NULL;
 
-   E_LIST_HANDLER_APPEND(handlers, ECORE_EVENT_DEVICE_ADD, _cb_device_add, NULL);
-   E_LIST_HANDLER_APPEND(handlers, ECORE_EVENT_DEVICE_DEL, _cb_device_del, NULL);
-
    input_devmgr_data = E_NEW(e_devicemgr_input_devmgr_data, 1);
    EINA_SAFETY_ON_NULL_RETURN_VAL(input_devmgr_data, 0);
 
    input_devmgr_data->block_devtype = 0x0;
+
+   _e_devicemgr_device_query();
+
+   E_LIST_HANDLER_APPEND(handlers, ECORE_EVENT_DEVICE_ADD, _cb_device_add, NULL);
+   E_LIST_HANDLER_APPEND(handlers, ECORE_EVENT_DEVICE_DEL, _cb_device_del, NULL);
 
    /* initialization of cynara for checking privilege */
 #ifdef ENABLE_CYNARA
