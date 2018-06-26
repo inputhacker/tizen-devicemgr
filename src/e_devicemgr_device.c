@@ -1,6 +1,7 @@
 #include "e_devicemgr_device.h"
 #include "e_devicemgr_privates.h"
 #include <tizen-extension-server-protocol.h>
+#include <e_keyrouter.h>
 
 static Eina_List *handlers = NULL;
 
@@ -1428,6 +1429,7 @@ _e_input_devmgr_keyevent_free(void *data EINA_UNUSED, void *ev)
    eina_stringshare_del(e->compose);
 
    if (e->dev) ecore_device_unref(e->dev);
+   if (e->data) E_FREE(e->data);
 
    free(e);
 }
@@ -1437,6 +1439,7 @@ _e_input_devmgr_generate_key_event(const char *key, Eina_Bool pressed, char *ide
 {
    Ecore_Event_Key *e;
    unsigned int keycode;
+   E_Keyrouter_Event_Data *key_data;
 
    EINA_SAFETY_ON_NULL_RETURN_VAL(key, TIZEN_INPUT_DEVICE_MANAGER_ERROR_INVALID_PARAMETER);
 
@@ -1457,7 +1460,9 @@ _e_input_devmgr_generate_key_event(const char *key, Eina_Bool pressed, char *ide
    e->timestamp = (int)(ecore_time_get() * 1000);
    e->same_screen = 1;
    e->keycode = keycode;
-   e->data = NULL;
+   key_data = E_NEW(E_Keyrouter_Event_Data, 1);
+   EINA_SAFETY_ON_NULL_GOTO(key_data, finish);
+   e->data = key_data;
 
    e->modifiers = 0;
    e->dev = ecore_device_ref(e_input_evdev_get_ecore_device(identifier, ECORE_DEVICE_CLASS_KEYBOARD));
