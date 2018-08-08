@@ -808,6 +808,14 @@ _e_input_devmgr_cb_unblock_events(struct wl_client *client, struct wl_resource *
    tizen_input_device_manager_send_error(resource, TIZEN_INPUT_DEVICE_MANAGER_ERROR_NONE);
 }
 
+unsigned int
+_e_input_devmgr_get_block_event_type(void)
+{
+   if (!input_devmgr_data) return 0;
+   return input_devmgr_data->block_devtype;
+}
+
+
 typedef struct _keycode_map{
     xkb_keysym_t keysym;
     xkb_keycode_t keycode;
@@ -2107,6 +2115,8 @@ e_devicemgr_device_init(void)
    EINA_SAFETY_ON_NULL_RETURN_VAL(input_devmgr_data, 0);
 
    input_devmgr_data->block_devtype = 0x0;
+   e_devicemgr.get_block_event_type = _e_input_devmgr_get_block_event_type;
+
 
    /* initialization of cynara for checking privilege */
 #ifdef ENABLE_CYNARA
