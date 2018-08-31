@@ -34,13 +34,6 @@ AC_PROG_LIBTOOL
 dnl ========================================================================
 # checks for libraries
 dnl ========================================================================
-# Check for ttrace
-PKG_CHECK_MODULES(TTRACE,
-                  [ttrace],
-                  [have_ttrace="yes"], [have_ttrace="no"])
-if test "x$have_ttrace" = "xyes"; then
-  AC_DEFINE(ENABLE_TTRACE, 1, [ttrace available])
-fi
 
 dnl ========================================================================
 # checks for header files
@@ -112,17 +105,6 @@ AC_ARG_ENABLE(homedir-install,
 	AS_HELP_STRING([--enable-homedir-install], [Install module in homedir]),
 	[ datadir="${HOME}/.e/e/modules/${PACKAGE}" ]
 )
-
-have_cynara=no
-AC_ARG_ENABLE(cynara,
-	AS_HELP_STRING([--enable-cynara], [enable cynara]),
-	[have_cynara=$enableval],
-	[have_cynara=no]
-)
-if test "x${have_cynara}" = "xyes"; then
-	PKG_CHECK_MODULES(CYNARA, [cynara-client, cynara-creds-socket, cynara-session])
-	AC_DEFINE([ENABLE_CYNARA],[1],[enable cynara])
-fi
 
 dnl ========================================================================
 # output files
