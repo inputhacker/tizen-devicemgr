@@ -78,6 +78,31 @@ _e_devicemgr_input_keyboard_process(int type, void *event)
    return res;
 }
 
+static void
+_e_devicemgr_input_touch_rotation_set(Ecore_Event_Device_Info *ev)
+{
+   Ecore_Drm_Device *dev;
+   Eina_List *dev_list, *l;
+   int rotation = 0;
+
+   if (!e_comp) return;
+   if (!e_comp->e_comp_screen) return;
+
+   rotation = e_comp->e_comp_screen->rotation;
+   if (!rotation) return;
+
+   if (!ev) return;
+   if (ev->clas != ECORE_DEVICE_CLASS_TOUCH) return;
+
+   dev_list = (Eina_List *)ecore_drm_devices_get();
+
+   EINA_LIST_FOREACH(dev_list, l, dev)
+     {
+        DMINF("%s device is now rotated (%d)\n", ev->name, rotation);
+        ecore_drm_device_touch_rotation_set(dev, rotation);
+     }
+}
+
 static Eina_Bool
 _e_devicemgr_event_filter(void *data, void *loop_data EINA_UNUSED, int type, void *event)
 {
@@ -104,6 +129,8 @@ _e_devicemgr_event_filter(void *data, void *loop_data EINA_UNUSED, int type, voi
    else if ((ECORE_EVENT_DEVICE_ADD == type) ||
             (ECORE_EVENT_DEVICE_DEL == type))
      {
+        if (type == ECORE_EVENT_DEVICE_ADD)
+          _e_devicemgr_input_touch_rotation_set(event);
         return e_devicemgr_check_detent_device_add(type, event);
      }
    else if ((ECORE_DRM_EVENT_INPUT_DEVICE_ADD == type) ||
