@@ -22,9 +22,10 @@ This package is a devicemgr for enlightenment.
 
 %build
 
-export GC_SECTIONS_FLAGS="-fdata-sections -ffunction-sections -Wl,--gc-sections"
-export CFLAGS+=" -Wall -Werror -g -fPIC -rdynamic ${GC_SECTIONS_FLAGS} -DE_LOGGING=1"
-export LDFLAGS+=" -Wl,--hash-style=both -Wl,--as-needed -Wl,--rpath=/usr/lib"
+export GC_SECTIONS_CFLAGS="-fdata-sections -ffunction-sections"
+export GC_SECTIONS_LDFLAGS="-Wl,--gc-sections"
+export CFLAGS+=" -Wall -Werror -g -fPIC ${GC_SECTIONS_CFLAGS} -DE_LOGGING=1"
+export LDFLAGS+=" -Wl,--hash-style=both -Wl,--as-needed -Wl,--rpath=/usr/lib -rdynamic ${GC_SECTIONS_LDFLAGS}"
 
 %reconfigure --enable-wayland-only
 
